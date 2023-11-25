@@ -7,7 +7,7 @@
     using this app. The app prepares remote_args struct exactly the same way
     as the crackme and passes it to the remote call.
 
-    (c) 2014 by Piotr Stolarz [pstolarz@gmail.com]
+    (c) 2014 by Piotr Stolarz [pstolarz@o2.pl]
  */
 
 static const char *remote_bin = "remote.bin";

@@ -2,7 +2,7 @@
     This servlet handles the remote call's HTTP request of
     the ESET crackme to successfully finish the last of its levels.
     
-    (c) 2014 by Piotr Stolarz [pstolarz@gmail.com]
+    (c) 2014 by Piotr Stolarz [pstolarz@o2.pl]
  */
 import java.io.IOException;
 import java.io.PrintWriter;

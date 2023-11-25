@@ -1,6 +1,6 @@
 /*
     ESET Engine Developer's challenge resolving library & app.
-    (c) 2014 by Piotr Stolarz [pstolarz@gmail.com]
+    (c) 2014 by Piotr Stolarz [pstolarz@o2.pl]
  */
 #include <stdio.h>
 #include <stdint.h>
