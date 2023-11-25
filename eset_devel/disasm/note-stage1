@@ -1,0 +1,321 @@
+;
+; chk_stage1(HWND hwndDlg)
+;
+; Searches the current directory for a file which name's CRC32 is 0x35370000.
+; The file must be a library possible to load by ntdll!LdrLoadDll(). In case
+; of successful load a handle to the module is returned, NULL otherwise.
+;
+004012e0 55              push    ebp
+004012e1 8bec            mov     ebp,esp
+004012e3 81ec68020000    sub     esp,268h
+004012e9 a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+004012ee 33c5            xor     eax,ebp
+004012f0 8945f8          mov     dword ptr [ebp-8],eax
+004012f3 8b4508          mov     eax,dword ptr [ebp+8]
+004012f6 53              push    ebx
+004012f7 56              push    esi
+004012f8 57              push    edi
+004012f9 684c020000      push    24Ch
+004012fe 8d8da8fdffff    lea     ecx,[ebp-258h]
+00401304 6a00            push    0
+00401306 51              push    ecx
+00401307 8985a0fdffff    mov     dword ptr [ebp-260h],eax                       ; hwndDlg
+0040130d c785a4fdffff00000000 mov dword ptr [ebp-25Ch],0
+00401317 e8a4780000      call    image00400000+0x8bc0 (00408bc0)                ; memset()
+0040131c 83c40c          add     esp,0Ch
+0040131f 8d95a4fdffff    lea     edx,[ebp-25Ch]                                 ; find_data
+00401325 52              push    edx
+00401326 6824ee4000      push    offset image00400000+0xee24 (0040ee24)
+0040132b ff1580d04000    call    dword ptr [image00400000+0xd080 (0040d080)]
+00401331 8bf8            mov     edi,eax
+00401333 89bd9cfdffff    mov     dword ptr [ebp-264h],edi                       ; findHndl = kernel32!FindFirstFileW("*", find_data)
+00401339 83ffff          cmp     edi,0FFFFFFFFh
+0040133c 0f8483000000    je      image00400000+0x13c5 (004013c5)                ; if (findHndl==INVALID_HANDLE_VALUE) goto finish_err
+
+find_loop:
+00401342 8d85d0fdffff    lea     eax,[ebp-230h]                                 ; fname = find_data.cFileName
+00401348 50              push    eax
+00401349 e8a7170000      call    image00400000+0x2af5 (00402af5)
+0040134e 8d85d0fdffff    lea     eax,[ebp-230h]
+00401354 83c404          add     esp,4
+00401357 8d5002          lea     edx,[eax+2]
+0040135a 8d9b00000000    lea     ebx,[ebx]
+00401360 668b08          mov     cx,word ptr [eax]
+00401363 83c002          add     eax,2
+00401366 6685c9          test    cx,cx
+00401369 75f5            jne     image00400000+0x1360 (00401360)
+0040136b 2bc2            sub     eax,edx
+0040136d d1f8            sar     eax,1
+0040136f 8bf0            mov     esi,eax                                        ; N:=file name
+00401371 83c8ff          or      eax,0FFFFFFFFh                                 ; crc=0xffffffff
+00401374 8bd6            mov     edx,esi
+00401376 8d8dd0fdffff    lea     ecx,[ebp-230h]
+0040137c 85f6            test    esi,esi
+0040137e 7423            je      image00400000+0x13a3 (004013a3)
+
+; CRC32 loop
+00401380 0fb619          movzx   ebx,byte ptr [ecx]
+00401383 8bf8            mov     edi,eax
+00401385 81e7ff000000    and     edi,0FFh
+0040138b 33fb            xor     edi,ebx
+0040138d c1e808          shr     eax,8
+00401390 3304bd00ea4000  xor     eax,dword ptr image00400000+0xea00 (0040ea00)[edi*4]   ; crc = (crc>>8)^crc_tab[(crc&0xff)^in[n]];
+00401397 83c102          add     ecx,2
+0040139a 4a              dec     edx
+0040139b 75e3            jne     image00400000+0x1380 (00401380)
+0040139d 8bbd9cfdffff    mov     edi,dword ptr [ebp-264h]
+004013a3 f7d0            not     eax                                            ; crc must be 0xcac8ffff == ~0x35370000
+004013a5 3d00003735      cmp     eax,35370000h
+004013aa 742c            je      image00400000+0x13d8 (004013d8)                ; if (~crc==0x35370000) goto finish_success
+004013ac 8d8da4fdffff    lea     ecx,[ebp-25Ch]
+004013b2 51              push    ecx
+004013b3 57              push    edi
+004013b4 ff1564d04000    call    dword ptr [image00400000+0xd064 (0040d064)]    ; kernel32!FindNextFileW(findHndl, find_data)
+004013ba 85c0            test    eax,eax
+004013bc 7584            jne     image00400000+0x1342 (00401342)                ; find_loop
+004013be 57              push    edi
+004013bf ff156cd04000    call    dword ptr [image00400000+0xd06c (0040d06c)]    ; kernel32!FindClose()
+
+finish_err:
+004013c5 33c0            xor     eax,eax
+004013c7 5f              pop     edi
+004013c8 5e              pop     esi
+004013c9 5b              pop     ebx
+004013ca 8b4df8          mov     ecx,dword ptr [ebp-8]
+004013cd 33cd            xor     ecx,ebp
+004013cf e827110000      call    image00400000+0x24fb (004024fb)
+004013d4 8be5            mov     esp,ebp
+004013d6 5d              pop     ebp
+004013d7 c3              ret
+
+finish_success:
+004013d8 57              push    edi
+004013d9 ff156cd04000    call    dword ptr [image00400000+0xd06c (0040d06c)]    ; kernel32!FindClose()
+004013df 8d5602          lea     edx,[esi+2]
+004013e2 81fa04010000    cmp     edx,104h
+004013e8 77db            ja      image00400000+0x13c5 (004013c5)                ; file length constraints
+004013ea 8b9da0fdffff    mov     ebx,dword ptr [ebp-260h]
+004013f0 b82e000000      mov     eax,2Eh
+004013f5 33c9            xor     ecx,ecx
+004013f7 8dbdd0fdffff    lea     edi,[ebp-230h]
+004013fd 66898475d0fdffff mov     word ptr [ebp+esi*2-230h],ax                  ; fname += "."
+00401405 66898c75d2fdffff mov     word ptr [ebp+esi*2-22Eh],cx
+0040140d e86efdffff      call    image00400000+0x1180 (00401180)                ; load_resv_lib(edi:fname, ebx:hwndDlg)
+00401412 8b4df8          mov     ecx,dword ptr [ebp-8]
+00401415 5f              pop     edi
+00401416 5e              pop     esi
+00401417 33cd            xor     ecx,ebp
+00401419 5b              pop     ebx
+0040141a e8dc100000      call    image00400000+0x24fb (004024fb)
+0040141f 8be5            mov     esp,ebp
+00401421 5d              pop     ebp
+00401422 c3              ret
+
+;
+; load_resv_lib(edi:fname, ebx:hwndDlg)
+;
+00401180 55              push    ebp
+00401181 8bec            mov     ebp,esp
+00401183 81ec14020000    sub     esp,214h
+00401189 a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+0040118e 33c5            xor     eax,ebp
+00401190 8945fc          mov     dword ptr [ebp-4],eax
+00401193 56              push    esi
+
+00401194 e867feffff      call    image00400000+0x1000 (00401000)                ; get_ntdll_handle()
+00401199 8bf0            mov     esi,eax
+0040119b 85f6            test    esi,esi                                        ; esi = handle of ntdll
+0040119d 753b            jne     image00400000+0x11da (004011da)
+0040119f 6a01            push    1
+004011a1 6800ee4000      push    offset image00400000+0xee00 (0040ee00)
+004011a6 8d95f8fdffff    lea     edx,[ebp-208h]
+004011ac e82f130000      call    image00400000+0x24e0 (004024e0)                ; spritnf()
+004011b1 83c408          add     esp,8
+004011b4 6a10            push    10h
+004011b6 6818ee4000      push    offset image00400000+0xee18 (0040ee18)
+004011bb 8d85f8fdffff    lea     eax,[ebp-208h]
+004011c1 50              push    eax
+004011c2 53              push    ebx
+004011c3 ff1574d14000    call    dword ptr [image00400000+0xd174 (0040d174)]    ; USER32!MessageBoxW() -> "Error 00000001."
+004011c9 33c0            xor     eax,eax
+004011cb 5e              pop     esi
+004011cc 8b4dfc          mov     ecx,dword ptr [ebp-4]
+004011cf 33cd            xor     ecx,ebp
+004011d1 e825130000      call    image00400000+0x24fb (004024fb)
+004011d6 8be5            mov     esp,ebp
+004011d8 5d              pop     ebp
+004011d9 c3              ret
+
+004011da a1601b4100      mov     eax,dword ptr [image00400000+0x11b60 (00411b60)]   ; load_dll_proc_addr
+004011df 85c0            test    eax,eax
+004011e1 757f            jne     image00400000+0x1262 (00401262)                ; is load_dll_proc_addr already set?
+004011e3 68ee134cb6      push    0B64C13EEh
+; check if ntdll!LdrGetProcedureAddress() is accessible in the system
+004011e8 e8e3feffff      call    image00400000+0x10d0 (004010d0)                ; get_proc_addr_crc(esi:ntdll, 0xB64C13EE) -> ntdll!LdrGetProcedureAddress()
+004011ed 83c404          add     esp,4
+004011f0 85c0            test    eax,eax
+004011f2 753b            jne     image00400000+0x122f (0040122f)
+004011f4 6a02            push    2
+004011f6 6800ee4000      push    offset image00400000+0xee00 (0040ee00)
+004011fb 8d95f8fdffff    lea     edx,[ebp-208h]
+00401201 e8da120000      call    image00400000+0x24e0 (004024e0)
+00401206 83c408          add     esp,8
+00401209 6a10            push    10h
+0040120b 6818ee4000      push    offset image00400000+0xee18 (0040ee18)
+00401210 8d8df8fdffff    lea     ecx,[ebp-208h]
+00401216 51              push    ecx
+00401217 53              push    ebx
+00401218 ff1574d14000    call    dword ptr [image00400000+0xd174 (0040d174)]    ; USER32!MessageBoxW() -> "Error 00000002."
+0040121e 33c0            xor     eax,eax
+00401220 5e              pop     esi
+00401221 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401224 33cd            xor     ecx,ebp
+00401226 e8d0120000      call    image00400000+0x24fb (004024fb)
+0040122b 8be5            mov     esp,ebp
+0040122d 5d              pop     ebp
+0040122e c3              ret
+
+0040122f 68f2793618      push    183679F2h
+00401234 e897feffff      call    image00400000+0x10d0 (004010d0)                ; get_proc_addr_crc(esi:ntdll, 0x183679F2) -> ntdll!LdrLoadDll
+00401239 83c404          add     esp,4
+0040123c a3601b4100      mov     dword ptr [image00400000+0x11b60 (00411b60)],eax   ; load_dll_proc_addr = ntdll!LdrLoadDll
+00401241 85c0            test    eax,eax
+00401243 751d            jne     image00400000+0x1262 (00401262)
+00401245 6a01            push    1
+00401247 8bf3            mov     esi,ebx
+00401249 e832feffff      call    image00400000+0x1080 (00401080)                ; USER32!MessageBoxW() -> "Error 00000001."
+0040124e 83c404          add     esp,4
+00401251 33c0            xor     eax,eax
+00401253 5e              pop     esi
+00401254 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401257 33cd            xor     ecx,ebp
+00401259 e89d120000      call    image00400000+0x24fb (004024fb)
+0040125e 8be5            mov     esp,ebp
+00401260 5d              pop     ebp
+00401261 c3              ret
+
+; eax points to ntdll!LdrLoadDll
+00401262 8bcf            mov     ecx,edi
+00401264 89bdf0fdffff    mov     dword ptr [ebp-210h],edi                       ; mod_name.Buffer = fname
+0040126a 8d7102          lea     esi,[ecx+2]
+0040126d 8d4900          lea     ecx,[ecx]
+00401270 668b11          mov     dx,word ptr [ecx]
+00401273 83c102          add     ecx,2
+00401276 6685d2          test    dx,dx
+00401279 75f5            jne     image00400000+0x1270 (00401270)
+0040127b 2bce            sub     ecx,esi
+0040127d d1f9            sar     ecx,1                                          ; ecx: fname length (bytes)
+0040127f 8d1409          lea     edx,[ecx+ecx]
+00401282 668995ecfdffff  mov     word ptr [ebp-214h],dx                         ; mod_name.Length = 2*ecx (in unicode chars)
+00401289 8b8decfdffff    mov     ecx,dword ptr [ebp-214h]
+0040128f 83c102          add     ecx,2
+00401292 8d95f4fdffff    lea     edx,[ebp-20Ch]
+00401298 52              push    edx
+00401299 66898deefdffff  mov     word ptr [ebp-212h],cx                         ; mod_name.MaximumLength = mod_name.Length+2
+004012a0 8d8decfdffff    lea     ecx,[ebp-214h]                                 ; &mod_name (type of PUNICODE_STRING)
+004012a6 51              push    ecx
+004012a7 6a00            push    0
+004012a9 6a00            push    0
+004012ab c785f4fdffff00000000 mov dword ptr [ebp-20Ch],0                        ; h_lib = NULL
+004012b5 ffd0            call    eax                                            ; ntdll!LdrLoadDll(NULL, 0, &mod_name, &h_lib)
+004012b7 8b4dfc          mov     ecx,dword ptr [ebp-4]
+004012ba 33d2            xor     edx,edx
+004012bc 85c0            test    eax,eax
+004012be 0f98c2          sets    dl                                             ; if (LdrLoadDll fails) dl=1; else dl=0;
+004012c1 33cd            xor     ecx,ebp
+004012c3 5e              pop     esi
+004012c4 8d42ff          lea     eax,[edx-1]
+004012c7 2385f4fdffff    and     eax,dword ptr [ebp-20Ch]                       ; if (LdrLoadDll fails) ret=0; else ret=h_lib;
+004012cd e829120000      call    image00400000+0x24fb (004024fb)
+004012d2 8be5            mov     esp,ebp
+004012d4 5d              pop     ebp
+004012d5 c3              ret
+
+;
+; get_proc_addr_crc(esi:hndl_lib, dword proc_crc)
+;
+; Return exported proc of hndl_lib module which name has CRC32 as in proc_crc
+;
+004010d0 55              push    ebp
+004010d1 8bec            mov     ebp,esp
+004010d3 8b463c          mov     eax,dword ptr [esi+3Ch]                        ; dos_header.e_lfanew
+004010d6 8b443078        mov     eax,dword ptr [eax+esi+78h]                    ; eax -> Directories.ExportTab.rva
+004010da 83ec14          sub     esp,14h
+004010dd 85c0            test    eax,eax
+004010df 7504            jne     image00400000+0x10e5 (004010e5)                ; are exports present?
+004010e1 8be5            mov     esp,ebp
+004010e3 5d              pop     ebp
+004010e4 c3              ret
+; exports present
+004010e5 8b4c301c        mov     ecx,dword ptr [eax+esi+1Ch]
+004010e9 03ce            add     ecx,esi
+004010eb 894dec          mov     dword ptr [ebp-14h],ecx                        ; exp_addr_tab
+004010ee 8b4c3024        mov     ecx,dword ptr [eax+esi+24h]
+004010f2 03ce            add     ecx,esi
+004010f4 894df0          mov     dword ptr [ebp-10h],ecx                        ; ordinals_tab
+004010f7 8b4c3020        mov     ecx,dword ptr [eax+esi+20h]
+004010fb 8b443014        mov     eax,dword ptr [eax+esi+14h]
+004010ff 53              push    ebx
+00401100 57              push    edi
+00401101 03ce            add     ecx,esi
+00401103 33ff            xor     edi,edi
+00401105 894df8          mov     dword ptr [ebp-8],ecx                          ; name_ptrs_tab
+00401108 897dfc          mov     dword ptr [ebp-4],edi                          ; i=0
+0040110b 8945f4          mov     dword ptr [ebp-0Ch],eax                        ; n_addr_tab    (number of exported entries)
+0040110e 85c0            test    eax,eax
+00401110 7509            jne     image00400000+0x111b (0040111b)                ; has exports?
+00401112 5f              pop     edi
+00401113 5b              pop     ebx
+00401114 8be5            mov     esp,ebp
+00401116 5d              pop     ebp
+00401117 c3              ret
+search_exp:
+00401118 8b4df8          mov     ecx,dword ptr [ebp-8]
+0040111b 8b14b9          mov     edx,dword ptr [ecx+edi*4]
+0040111e 03d6            add     edx,esi                                        ; exp_name = hndl_lib+name_ptrs_tab[i]; j=0
+00401120 8bc2            mov     eax,edx
+00401122 8d5801          lea     ebx,[eax+1]
+00401125 8a08            mov     cl,byte ptr [eax]
+00401127 40              inc     eax
+00401128 84c9            test    cl,cl
+0040112a 75f9            jne     image00400000+0x1125 (00401125)
+0040112c 2bc3            sub     eax,ebx                                        ; exp_name_len
+0040112e b9ffffffff      mov     ecx,0FFFFFFFFh                                 ; crc = 0xffffffff
+00401133 741e            je      image00400000+0x1153 (00401153)
+; CRC32 loop over exp_name
+00401135 0fb61a          movzx   ebx,byte ptr [edx]
+00401138 8bf9            mov     edi,ecx
+0040113a 81e7ff000000    and     edi,0FFh
+00401140 33fb            xor     edi,ebx
+00401142 c1e908          shr     ecx,8
+00401145 330cbd00ea4000  xor     ecx,dword ptr image00400000+0xea00 (0040ea00)[edi*4]
+0040114c 42              inc     edx
+0040114d 48              dec     eax
+0040114e 75e5            jne     image00400000+0x1135 (00401135)
+00401150 8b7dfc          mov     edi,dword ptr [ebp-4]
+; check crc against proc_crc
+00401153 f7d1            not     ecx
+00401155 394d08          cmp     dword ptr [ebp+8],ecx
+00401158 7411            je      image00400000+0x116b (0040116b)                ; if (proc_crc==~exp_name_csum) goto exp_found
+0040115a 47              inc     edi
+0040115b 897dfc          mov     dword ptr [ebp-4],edi                          ; i++
+0040115e 3b7df4          cmp     edi,dword ptr [ebp-0Ch]
+00401161 72b5            jb      image00400000+0x1118 (00401118)                ; if (i<n_addr_tab) goto search_exp
+; export not found
+00401163 5f              pop     edi
+00401164 33c0            xor     eax,eax
+00401166 5b              pop     ebx
+00401167 8be5            mov     esp,ebp
+00401169 5d              pop     ebp
+0040116a c3              ret
+exp_found:
+0040116b 8b4df0          mov     ecx,dword ptr [ebp-10h]
+0040116e 0fb71479        movzx   edx,word ptr [ecx+edi*2]
+00401172 8b45ec          mov     eax,dword ptr [ebp-14h]
+00401175 8b0490          mov     eax,dword ptr [eax+edx*4]
+00401178 5f              pop     edi
+00401179 03c6            add     eax,esi                                        ; proc_addr = hndl_lib+exp_addr_tab[ordinals_tab[i]]
+0040117b 5b              pop     ebx
+0040117c 8be5            mov     esp,ebp
+0040117e 5d              pop     ebp
+0040117f c3              ret

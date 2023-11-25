@@ -1,0 +1,351 @@
+;
+; chk_stage4(ecx:h_lib) - callback function CRC32: 0xDEADCAFE
+;
+; The returned buf[] must contains 5 40-bit integers (denoted N0..N4) encoded
+; as hex strings (10 chars each one) and concatenated together into one string.
+; The procedure calculate 5 bytes (denoted X0..X4) basing on:
+;  - a user name as returned by GetUserNameW()
+;  - volume s/n as retrieved by GetVolumeInformationW() or random data if
+;    volume s/n is 0).
+;
+; Next the poly value is calculated as:
+;  Xi^5 - N0*Xi^4 + N1*Xi^3 - N2*Xi^2 + N3*Xi - N4
+; which must be 0 for every Xi, Therefore Xi must be the roots of the poly.
+; The Ni coefficients may be easy calculated by expanding the poly, which is
+; the task of the callback func.
+;
+; NOTE1: The proc strongly depends on the endiannes of the platform (LE).
+; NOTE2: If a string returned from buf[] contains more than 5 40-bit ints,
+; the proc ends up with a buffer overflow issue, since it expects only 5
+; elements but doesn't check this (bug).
+;
+00401e20 55              push    ebp
+00401e21 8bec            mov     ebp,esp
+00401e23 b864120000      mov     eax,1264h
+00401e28 e8d3890000      call    image00400000+0xa800 (0040a800)
+00401e2d a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+00401e32 33c5            xor     eax,ebp
+00401e34 8945fc          mov     dword ptr [ebp-4],eax
+00401e37 53              push    ebx
+00401e38 56              push    esi
+00401e39 57              push    edi
+00401e3a 8bf1            mov     esi,ecx
+00401e3c 68fecaadde      push    0DEADCAFEh
+00401e41 e88af2ffff      call    image00400000+0x10d0 (004010d0)                ; get_proc_addr_crc(esi:h_lib, 0xDEADCAFE)
+00401e46 8bf0            mov     esi,eax
+00401e48 33db            xor     ebx,ebx
+00401e4a 83c404          add     esp,4
+00401e4d 3bf3            cmp     esi,ebx
+00401e4f 7513            jne     image00400000+0x1e64 (00401e64)
+finish_fail:
+00401e51 32c0            xor     al,al
+00401e53 5f              pop     edi
+00401e54 5e              pop     esi
+00401e55 5b              pop     ebx
+00401e56 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401e59 33cd            xor     ecx,ebp
+00401e5b e89b060000      call    image00400000+0x24fb (004024fb)
+00401e60 8be5            mov     esp,ebp
+00401e62 5d              pop     ebp
+00401e63 c3              ret
+; export has been found
+00401e64 68ff0f0000      push    0FFFh
+00401e69 8d85e1edffff    lea     eax,[ebp-121Fh]
+00401e6f 53              push    ebx
+00401e70 50              push    eax
+00401e71 889de0edffff    mov     byte ptr [ebp-1220h],bl
+00401e77 e8446d0000      call    image00400000+0x8bc0 (00408bc0)                ; memset(): clear buf[], of type byte buf[0x1000]
+00401e7c 83c40c          add     esp,0Ch
+00401e7f 53              push    ebx
+00401e80 53              push    ebx
+00401e81 53              push    ebx
+00401e82 53              push    ebx
+00401e83 8d8db4edffff    lea     ecx,[ebp-124Ch]
+00401e89 51              push    ecx                                            ; &vol_sn, of type dword vol_sn
+00401e8a 53              push    ebx
+00401e8b 53              push    ebx
+00401e8c 53              push    ebx
+00401e8d 899db4edffff    mov     dword ptr [ebp-124Ch],ebx
+00401e93 ff1560d04000    call    dword ptr [image00400000+0xd060 (0040d060)]    ; kernel32!GetVolumeInformationW()
+00401e99 8bbdb4edffff    mov     edi,dword ptr [ebp-124Ch]
+00401e9f 3bfb            cmp     edi,ebx
+00401ea1 7515            jne     image00400000+0x1eb8 (00401eb8)
+; if vol_sn is 0, it is set as random num
+00401ea3 e8e2090000      call    image00400000+0x288a (0040288a)                ; r1 = prf()
+00401ea8 8bf8            mov     edi,eax
+00401eaa e8db090000      call    image00400000+0x288a (0040288a)                ; r2 = prf()
+00401eaf 0faff8          imul    edi,eax                                        ; vol_sn = r1*r2
+00401eb2 89bdb4edffff    mov     dword ptr [ebp-124Ch],edi
+; vol_sn established (random or disk sn)
+00401eb8 57              push    edi
+00401eb9 6800100000      push    1000h
+00401ebe 8d95e0edffff    lea     edx,[ebp-1220h]
+00401ec4 52              push    edx
+00401ec5 ffd6            call    esi                                            ; h_lib!stage4_callback(buf, 0x1000, vol_sn)
+00401ec7 68fe010000      push    1FEh
+00401ecc 8d8de2fdffff    lea     ecx,[ebp-21Eh]
+00401ed2 33c0            xor     eax,eax
+00401ed4 53              push    ebx
+00401ed5 51              push    ecx
+00401ed6 668985e0fdffff  mov     word ptr [ebp-220h],ax
+00401edd e8de6c0000      call    image00400000+0x8bc0 (00408bc0)                ; memset(): clear usr_name[], of type word usr_name[0x100]
+00401ee2 83c40c          add     esp,0Ch
+00401ee5 8d55f4          lea     edx,[ebp-0Ch]
+00401ee8 52              push    edx
+00401ee9 8d85e0fdffff    lea     eax,[ebp-220h]
+00401eef 50              push    eax
+00401ef0 c745f400010000  mov     dword ptr [ebp-0Ch],100h                       ; sz_usr_name = 0x100 (size of the usr_name[] buf in unicode chars)
+00401ef7 ff1500d04000    call    dword ptr [image00400000+0xd000 (0040d000)]    ; ADVAPI32!GetUserNameW(usr_name, &sz_usr_name)
+00401efd 8b55f4          mov     edx,dword ptr [ebp-0Ch]
+00401f00 83c8ff          or      eax,0FFFFFFFFh
+00401f03 8d8de0fdffff    lea     ecx,[ebp-220h]
+; calculate crc32 of the user name
+00401f09 3bd3            cmp     edx,ebx
+00401f0b 7620            jbe     image00400000+0x1f2d (00401f2d)
+00401f0d 8d4900          lea     ecx,[ecx]
+00401f10 0fb639          movzx   edi,byte ptr [ecx]
+00401f13 8bf0            mov     esi,eax
+00401f15 81e6ff000000    and     esi,0FFh
+00401f1b 33f7            xor     esi,edi
+00401f1d c1e808          shr     eax,8
+00401f20 3304b500ea4000  xor     eax,dword ptr image00400000+0xea00 (0040ea00)[esi*4]
+00401f27 83c102          add     ecx,2
+00401f2a 4a              dec     edx
+00401f2b 75e3            jne     image00400000+0x1f10 (00401f10)
+00401f2d f7d0            not     eax
+
+; eax = crc32 of user name (only lo-bytes of unicode chars taken into account)
+00401f2f f7a5b4edffff    mul     eax,dword ptr [ebp-124Ch]
+00401f35 8bf8            mov     edi,eax                                        ; LODWORD(user_name_crc32*vol_sn)
+00401f37 33c0            xor     eax,eax
+00401f39 8995a4edffff    mov     dword ptr [ebp-125Ch],edx                      ; HIDWORD(user_name_crc32*vol_sn)
+; init local vars with zeros
+;
+; clear array of nums (5 64-bit numbers), of type dword nums[5][2] each number consists
+; of 2 dwords in LE order, by definition unsigned qword Ni = (qword)&nums[i][0] (LE order)
+00401f3f 899db8edffff    mov     dword ptr [ebp-1248h],ebx                      ; N0 = 0
+00401f45 899dbcedffff    mov     dword ptr [ebp-1244h],ebx                      ;
+00401f4b 8985c0edffff    mov     dword ptr [ebp-1240h],eax                      ; N1 = 0
+00401f51 8985c4edffff    mov     dword ptr [ebp-123Ch],eax                      ;
+00401f57 8985c8edffff    mov     dword ptr [ebp-1238h],eax                      ; N2 = 0
+00401f5d 8985ccedffff    mov     dword ptr [ebp-1234h],eax                      ;
+00401f63 8985d0edffff    mov     dword ptr [ebp-1230h],eax                      ; N3 = 0
+00401f69 8985d4edffff    mov     dword ptr [ebp-122Ch],eax                      ;
+00401f6f 8985d8edffff    mov     dword ptr [ebp-1228h],eax                      ; N4 = 0
+00401f75 8985dcedffff    mov     dword ptr [ebp-1224h],eax                      ;
+; clear conv_buf[], of type byte conv_buf[10]
+00401f7b 8845e0          mov     byte ptr [ebp-20h],al
+00401f7e 8945e1          mov     dword ptr [ebp-1Fh],eax
+00401f81 8945e5          mov     dword ptr [ebp-1Bh],eax
+00401f84 8945e9          mov     dword ptr [ebp-17h],eax
+
+00401f87 668945ed        mov     word ptr [ebp-13h],ax
+00401f8b 8845ef          mov     byte ptr [ebp-11h],al
+
+; read string from buf[] as a one consisting of concatenated 40-bit hex integers
+; (10 hex-digit each one). The converted integers are stored in nums[] array
+; (array of 5 64-bits ints). It indicates that the buf[] may contain up
+; to 5 40-bit numbers (otherwise the loop will go outside nums[] tab!). If contains
+; less than 5 the remaining ones are inferred as 0s.
+00401f8e 33f6            xor     esi,esi                                        ; i=0 (loop index), j=0 (index over nums[] tab 8 bytes each)
+read_buf_loop:
+00401f90 389c35e0edffff  cmp     byte ptr [ebp+esi-1220h],bl
+00401f97 7473            je      image00400000+0x200c (0040200c)                ; end of the string in buf[]?
+00401f99 8b8c35e0edffff  mov     ecx,dword ptr [ebp+esi-1220h]
+00401fa0 8b9435e4edffff  mov     edx,dword ptr [ebp+esi-121Ch]
+00401fa7 668b8435e8edffff mov     ax,word ptr [ebp+esi-1218h]
+00401faf 894de0          mov     dword ptr [ebp-20h],ecx
+00401fb2 8d8da8edffff    lea     ecx,[ebp-1258h]
+00401fb8 51              push    ecx
+00401fb9 8955e4          mov     dword ptr [ebp-1Ch],edx
+00401fbc 8d55e0          lea     edx,[ebp-20h]
+00401fbf 6830ee4000      push    offset image00400000+0xee30 (0040ee30)
+00401fc4 52              push    edx
+00401fc5 668945e8        mov     word ptr [ebp-18h],ax                          ; copy 10 bytes from &buf[i] to conv_buf[]
+00401fc9 899da8edffff    mov     dword ptr [ebp-1258h],ebx                      ; num, of type dword num[2] (is a 64-bit integer, dwords in LE order)
+00401fcf 899dacedffff    mov     dword ptr [ebp-1254h],ebx
+00401fd5 e822060000      call    image00400000+0x25fc (004025fc)                ; sscanf(conv_buf, "%10I64X", &num)     <- a bug on the BE platform!, the assumption sscanf() stores in LE order
+00401fda 8b8dacedffff    mov     ecx,dword ptr [ebp-1254h]
+00401fe0 b8cdcccccc      mov     eax,0CCCCCCCDh
+00401fe5 f7e6            mul     eax,esi                                        ; edx=i*8, eax=i*2
+00401fe7 8b85a8edffff    mov     eax,dword ptr [ebp-1258h]
+00401fed c1ea03          shr     edx,3
+00401ff0 83c60a          add     esi,0Ah                                        ; i+=10
+00401ff3 83c40c          add     esp,0Ch
+00401ff6 8984d5b8edffff  mov     dword ptr [ebp+edx*8-1248h],eax                ; in_nums[j++] = num
+00401ffd 898cd5bcedffff  mov     dword ptr [ebp+edx*8-1244h],ecx
+00402004 81fe00100000    cmp     esi,1000h
+0040200a 7c84            jl      image00400000+0x1f90 (00401f90)                ; if (i<0x1000) goto read_buf_loop
+
+; byte roots[5] (under ebp-0x0c) contains 40-bit result of a
+; multiplication: (user_name_crc32*vol_sn) in the LE order
+0040200c 8a95a4edffff    mov     dl,byte ptr [ebp-125Ch]
+00402012 897df4          mov     dword ptr [ebp-0Ch],edi                        ; LODWORD(user_name_crc32*vol_sn)
+00402015 8855f8          mov     byte ptr [ebp-8],dl                            ; HIDWORD(user_name_crc32*vol_sn)&0xff
+
+00402018 899db4edffff    mov     dword ptr [ebp-124Ch],ebx                      ; i=0 (loop index 0..4)
+0040201e eb02            jmp     image00400000+0x2022 (00402022)
+calc_loop:
+00402020 33db            xor     ebx,ebx
+00402022 8b85b4edffff    mov     eax,dword ptr [ebp-124Ch]
+00402028 0fb64405f4      movzx   eax,byte ptr [ebp+eax-0Ch]                     ; roots[i], by definition unsigned qword Xi=roots[i]
+0040202d 6aff            push    0FFFFFFFFh
+0040202f 99              cdq                                                    ; eax=roots[i], edx=0
+00402030 6aff            push    0FFFFFFFFh
+00402032 53              push    ebx
+00402033 8bf0            mov     esi,eax                                        ; (unsigned dword)roots[i]
+00402035 8bfa            mov     edi,edx                                        ; 0
+00402037 8bc2            mov     eax,edx                                        ; 0
+00402039 6a04            push    4
+0040203b 50              push    eax
+0040203c 56              push    esi
+; R1 = Xi^4
+0040203d e89efbffff      call    image00400000+0x1be0 (00401be0)                ; R1 = expmod(Xi, (qword)4, 0xffffffff:0xffffffff)
+00402042 83c418          add     esp,18h
+00402045 57              push    edi
+00402046 56              push    esi
+00402047 52              push    edx
+00402048 50              push    eax
+; R1 = R1*Xi = Xi^5
+00402049 e812740000      call    image00400000+0x9460 (00409460)                ; R1 = mul(R1, Xi)
+0040204e 6aff            push    0FFFFFFFFh
+00402050 6aff            push    0FFFFFFFFh
+00402052 52              push    edx
+00402053 50              push    eax
+00402054 e827a10000      call    image00400000+0xc180 (0040c180)                ; R1 = mod(R1, 0xffffffff:0xffffffff) - truncate mul result to 64-bit
+00402059 6aff            push    0FFFFFFFFh
+0040205b 6aff            push    0FFFFFFFFh
+0040205d 6a00            push    0
+0040205f 6a02            push    2
+00402061 57              push    edi
+00402062 56              push    esi
+00402063 8bd8            mov     ebx,eax
+00402065 8955ec          mov     dword ptr [ebp-14h],edx                        ; R1 store in [ebp-14h]:ebx
+; R2 = Xi^2
+00402068 e873fbffff      call    image00400000+0x1be0 (00401be0)                ; R2 = expmod(Xi, (qword)2, 0xffffffff:0xffffffff)
+0040206d 83c418          add     esp,18h
+00402070 52              push    edx
+00402071 50              push    eax
+00402072 52              push    edx
+00402073 50              push    eax
+; R2 = R2*R2 = Xi^4
+00402074 e8e7730000      call    image00400000+0x9460 (00409460)                ; R2 = mul(R2, R2)
+00402079 6aff            push    0FFFFFFFFh
+0040207b 6aff            push    0FFFFFFFFh
+0040207d 52              push    edx
+0040207e 50              push    eax
+0040207f e8fca00000      call    image00400000+0xc180 (0040c180)                ; R2 = mod(R2, 0xffffffff:0xffffffff) - truncate mul result to 64-bit
+00402084 8b8dbcedffff    mov     ecx,dword ptr [ebp-1244h]
+0040208a 51              push    ecx
+0040208b 8b8db8edffff    mov     ecx,dword ptr [ebp-1248h]
+00402091 51              push    ecx
+00402092 52              push    edx
+00402093 50              push    eax
+; R2 = R2*N0 = N0*Xi^4
+00402094 e8c7730000      call    image00400000+0x9460 (00409460)                ; R2 = mul(R2, N0)
+00402099 6aff            push    0FFFFFFFFh
+0040209b 2bd8            sub     ebx,eax
+0040209d 8b45ec          mov     eax,dword ptr [ebp-14h]
+004020a0 6aff            push    0FFFFFFFFh
+004020a2 6a00            push    0
+004020a4 1bc2            sbb     eax,edx
+004020a6 8bcf            mov     ecx,edi
+004020a8 6a02            push    2
+004020aa 8985a4edffff    mov     dword ptr [ebp-125Ch],eax                      ; (R1-R2 = Xi^5 - N0*Xi^4) stored in [ebp-125Ch]:ebx
+004020b0 8bc6            mov     eax,esi
+004020b2 51              push    ecx
+004020b3 50              push    eax
+; R3 = Xi^2
+004020b4 e827fbffff      call    image00400000+0x1be0 (00401be0)                ; expmod(Xi, (qword)2, 0xffffffff:0xffffffff)
+004020b9 83c418          add     esp,18h
+004020bc 57              push    edi
+004020bd 56              push    esi
+004020be 52              push    edx
+004020bf 50              push    eax
+; R3 = R3*Xi = Xi^3
+004020c0 e89b730000      call    image00400000+0x9460 (00409460)                ; R3 = mul(R3, Xi)
+004020c5 6aff            push    0FFFFFFFFh
+004020c7 6aff            push    0FFFFFFFFh
+004020c9 52              push    edx
+004020ca 50              push    eax
+004020cb e8b0a00000      call    image00400000+0xc180 (0040c180)                ; R3 = mod(R3, 0xffffffff:0xffffffff) - truncate mul result to 64-bit
+004020d0 8b8dc4edffff    mov     ecx,dword ptr [ebp-123Ch]
+004020d6 51              push    ecx
+004020d7 8b8dc0edffff    mov     ecx,dword ptr [ebp-1240h]
+004020dd 51              push    ecx
+004020de 52              push    edx
+004020df 50              push    eax
+; R3 = R3*N1 = N1*Xi^3
+004020e0 e87b730000      call    image00400000+0x9460 (00409460)                ; R3 = mul(R3, N1)
+004020e5 6aff            push    0FFFFFFFFh
+004020e7 6aff            push    0FFFFFFFFh
+004020e9 6a00            push    0
+004020eb 6a01            push    1
+004020ed 03d8            add     ebx,eax
+004020ef 1195a4edffff    adc     dword ptr [ebp-125Ch],edx                      ; (R3+R1-R2 = Xi^5 + N1*Xi^3 - N0*Xi^4) stored in [ebp-125Ch]:ebx
+004020f5 57              push    edi
+004020f6 56              push    esi
+004020f7 e8e4faffff      call    image00400000+0x1be0 (00401be0)                ; Xi = expmod(Xi, 1, 0xffffffff:0xffffffff) - does nothing
+004020fc 83c418          add     esp,18h
+004020ff 52              push    edx
+00402100 50              push    eax
+00402101 52              push    edx
+00402102 50              push    eax
+; R4 = Xi^2
+00402103 e858730000      call    image00400000+0x9460 (00409460)                ; R4 = mul(Xi, Xi)
+00402108 6aff            push    0FFFFFFFFh
+0040210a 6aff            push    0FFFFFFFFh
+0040210c 52              push    edx
+0040210d 50              push    eax
+0040210e e86da00000      call    image00400000+0xc180 (0040c180)                ; R4 = mod(R4, 0xffffffff:0xffffffff) - truncate mul result to 64-bit
+00402113 8995acedffff    mov     dword ptr [ebp-1254h],edx
+00402119 8b95d4edffff    mov     edx,dword ptr [ebp-122Ch]
+0040211f 52              push    edx
+00402120 8985a8edffff    mov     dword ptr [ebp-1258h],eax                      ; (R4 = Xi^2) stored in [ebp-1258h]:[ebp-1254h]
+00402126 8b85d0edffff    mov     eax,dword ptr [ebp-1230h]
+0040212c 50              push    eax
+0040212d 57              push    edi
+0040212e 56              push    esi
+; R5 = Xi*N3
+0040212f e82c730000      call    image00400000+0x9460 (00409460)                ; R5 = mul(Xi, N3)
+00402134 8b8dccedffff    mov     ecx,dword ptr [ebp-1234h]
+0040213a 51              push    ecx
+0040213b 8b8da8edffff    mov     ecx,dword ptr [ebp-1258h]
+00402141 8bfa            mov     edi,edx
+00402143 8b95c8edffff    mov     edx,dword ptr [ebp-1238h]
+00402149 8bf0            mov     esi,eax                                        ; (R5 = N3*Xi) stored in edi:esi
+0040214b 8b85acedffff    mov     eax,dword ptr [ebp-1254h]
+00402151 52              push    edx
+00402152 50              push    eax
+00402153 51              push    ecx
+; R6 = R4*N2 = N2*Xi^2
+00402154 e807730000      call    image00400000+0x9460 (00409460)                ; R6 = mul(R4, N2)
+00402159 2bf0            sub     esi,eax
+0040215b 1bfa            sbb     edi,edx                                        ; (R5-R6 = N3*Xi - N2*Xi^2) stored in edi:esi
+0040215d 2bb5d8edffff    sub     esi,dword ptr [ebp-1228h]                      ; 
+00402163 1bbddcedffff    sbb     edi,dword ptr [ebp-1224h]                      ; (R5-R6-N4 = N3*Xi - N2*Xi^2 - N4) stored in edi:esi
+00402169 03f3            add     esi,ebx
+0040216b 13bda4edffff    adc     edi,dword ptr [ebp-125Ch]                      ; (R = R5-R6-N4+R3+R1-R2 = Xi^5 - N0*Xi^4 + N1*Xi^3 - N2*Xi^2 + N3*Xi - N4) stored in edi:esi
+
+; R must be 0 for every Xi to fulfil the stage
+00402171 85f6            test    esi,esi
+00402173 0f85d8fcffff    jne     image00400000+0x1e51 (00401e51)                ; if (LODWORD(R)!=0) finish_fail
+00402179 85ff            test    edi,edi
+0040217b 0f85d0fcffff    jne     image00400000+0x1e51 (00401e51)                ; if (HIDWORD(R)!=0) finish_fail
+00402181 8b85b4edffff    mov     eax,dword ptr [ebp-124Ch]
+00402187 40              inc     eax
+00402188 8985b4edffff    mov     dword ptr [ebp-124Ch],eax
+0040218e 83f805          cmp     eax,5
+00402191 0f8c89feffff    jl      image00400000+0x2020 (00402020)                ; if (i<5) calc_loop
+
+; stage 4 passed
+00402197 8b4dfc          mov     ecx,dword ptr [ebp-4]
+0040219a 5f              pop     edi
+0040219b 5e              pop     esi
+0040219c 33cd            xor     ecx,ebp
+0040219e b001            mov     al,1
+004021a0 5b              pop     ebx
+004021a1 e855030000      call    image00400000+0x24fb (004024fb)
+004021a6 8be5            mov     esp,ebp
+004021a8 5d              pop     ebp
+004021a9 c3              ret

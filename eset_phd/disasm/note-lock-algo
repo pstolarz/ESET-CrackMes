@@ -1,0 +1,499 @@
+initial lock_val: 0x48AEEFD486289CFB set by:
+
+00404302 c700fb9c2886    mov     dword ptr [eax],86289CFBh
+00404308 c74004d4efae48  mov     dword ptr [eax+4],48AEEFD4h
+0040430f c3              ret
+
+--------------------------------------------------------------------------------
+button action handler
+
+; button 0x10 specific
+00403ff0 56              push    esi
+00403ff1 6a10            push    10h                                            ; arg: button_num
+00403ff3 8bf1            mov     esi,ecx                                        ; arg: params (a pointer to action params)
+00403ff5 e856fdffff      call    image00400000+0x3d50 (00403d50)                ; update_check_lock_val()
+00403ffa 8bce            mov     ecx,esi
+00403ffc 5e              pop     esi
+00403ffd e9eed9ffff      jmp     image00400000+0x19f0 (004019f0)
+; common for all buttons
+004019f0 55              push    ebp
+004019f1 8bec            mov     ebp,esp
+004019f3 51              push    ecx
+004019f4 53              push    ebx
+004019f5 56              push    esi
+004019f6 57              push    edi
+004019f7 8bf9            mov     edi,ecx                                        ; h_btn_tab = (dword [])(params+0)
+004019f9 8d8fe0000000    lea     ecx,[edi+0E0h]                                 ; &lock_val, of type qword lock_val
+004019ff e88c290000      call    image00400000+0x4390 (00404390)                ; new_states = get_btn_states()
+00401a04 be01000000      mov     esi,1
+00401a09 8945fc          mov     dword ptr [ebp-4],eax                          ; new_states
+00401a0c 81c79c000000    add     edi,9Ch
+00401a12 8d5e0f          lea     ebx,[esi+0Fh]
+; update button states by new_states (1st bit: 1st button, 16th bit: 16th button); 0:opened, 1:closed
+00401a15 8b0f            mov     ecx,dword ptr [edi]
+00401a17 8575fc          test    dword ptr [ebp-4],esi
+00401a1a 7404            je      image00400000+0x1a20 (00401a20)
+00401a1c 6a00            push    0                                              ; closed
+00401a1e eb02            jmp     image00400000+0x1a22 (00401a22)
+00401a20 6a01            push    1                                              ; opened
+00401a22 e889800c00      call    image00400000+0xc9ab0 (004c9ab0)               ; update button's internals
+00401a27 83c704          add     edi,4
+00401a2a d1c6            rol     esi,1
+00401a2c 4b              dec     ebx
+00401a2d 75e6            jne     image00400000+0x1a15 (00401a15)
+00401a2f 5f              pop     edi
+00401a30 5e              pop     esi
+00401a31 5b              pop     ebx
+00401a32 8be5            mov     esp,ebp
+00401a34 5d              pop     ebp
+00401a35 c3              ret
+
+--------------------------------------------------------------------------------
+update_check_lock_val()
+
+00403d50 55              push    ebp
+00403d51 8bec            mov     ebp,esp
+00403d53 56              push    esi
+00403d54 8bf1            mov     esi,ecx
+00403d56 57              push    edi
+00403d57 8dbee0000000    lea     edi,[esi+0E0h]                                 ; &lock_val
+00403d5d 8bcf            mov     ecx,edi
+00403d5f e82c060000      call    image00400000+0x4390 (00404390)                ; cur_states = get_btn_states()
+00403d64 8b4d08          mov     ecx,dword ptr [ebp+8]                          ; button_num
+00403d67 49              dec     ecx
+00403d68 ba01000000      mov     edx,1
+00403d6d d3e2            shl     edx,cl
+00403d6f 85d0            test    eax,edx
+00403d71 7406            je      image00400000+0x3d79 (00403d79)
+; button button_num is currently closed; mark it as opened in cur_states
+00403d73 f7d2            not     edx
+00403d75 23c2            and     eax,edx
+00403d77 eb02            jmp     image00400000+0x3d7b (00403d7b)
+; button button_num is currently opened; mark it as closed in cur_states
+00403d79 0bc2            or      eax,edx
+
+00403d7b 50              push    eax
+00403d7c 8bcf            mov     ecx,edi
+00403d7e e83d070000      call    image00400000+0x44c0 (004044c0)                ; set_btn_states(ecx:&lock_val, cur_states)
+00403d83 8bcf            mov     ecx,edi
+00403d85 e886050000      call    image00400000+0x4310 (00404310)                ; recalc_lock_val(ecx:&lock_val)
+00403d8a 8bcf            mov     ecx,edi                                        ; &lock_val
+00403d8c e8af070000      call    image00400000+0x4540 (00404540)                ; is_lock_opened()
+00403d91 85c0            test    eax,eax
+00403d93 7470            je      image00400000+0x3e05 (00403e05)
+; lock opened
+00403d95 6a00            push    0
+00403d97 6818798500      push    offset image00400000+0x457918 (00857918)       ; -> L"PHDays 2@12 Crackme"
+00403d9c 68c0788500      push    offset image00400000+0x4578c0 (008578c0)       ; -> L"Congrats, you opened the lock !!! Go on !!!"
+00403da1 6a00            push    0
+00403da3 ff1564638500    call    dword ptr [image00400000+0x456364 (00856364)]  ; USER32!MessageBoxW
+00403da9 8b4e6c          mov     ecx,dword ptr [esi+6Ch]
+00403dac 6a01            push    1
+00403dae e81dc00a00      call    image00400000+0xafdd0 (004afdd0)
+00403db3 8b8e8c000000    mov     ecx,dword ptr [esi+8Ch]
+00403db9 6a01            push    1
+00403dbb e810c00a00      call    image00400000+0xafdd0 (004afdd0)
+00403dc0 8b4e74          mov     ecx,dword ptr [esi+74h]
+00403dc3 6a01            push    1
+00403dc5 e806c00a00      call    image00400000+0xafdd0 (004afdd0)
+00403dca 8b8e88000000    mov     ecx,dword ptr [esi+88h]
+00403dd0 6a01            push    1
+00403dd2 e8f9bf0a00      call    image00400000+0xafdd0 (004afdd0)
+00403dd7 8b8e80000000    mov     ecx,dword ptr [esi+80h]
+00403ddd 6a01            push    1
+00403ddf e8ecbf0a00      call    image00400000+0xafdd0 (004afdd0)
+00403de4 8b8e84000000    mov     ecx,dword ptr [esi+84h]
+00403dea 6a01            push    1
+00403dec e8dfbf0a00      call    image00400000+0xafdd0 (004afdd0)
+00403df1 8b4e7c          mov     ecx,dword ptr [esi+7Ch]
+00403df4 6a01            push    1
+00403df6 e8d5bf0a00      call    image00400000+0xafdd0 (004afdd0)
+00403dfb 6a08            push    8
+00403dfd 57              push    edi
+00403dfe 8bce            mov     ecx,esi
+00403e00 e83bdcffff      call    image00400000+0x1a40 (00401a40)                ; decrypts key-name verification library using current lock_val
+                                                                                ; the lock_val must therefore constitute resolving decryption
+                                                                                ; key: 0xe7fd097289cbb591
+00403e05 5f              pop     edi
+00403e06 5e              pop     esi
+00403e07 5d              pop     ebp
+00403e08 c20400          ret     4
+
+--------------------------------------------------------------------------------
+recalc_lock_val()
+Recalculates lock_val as: lock_val = (lock_val<<1) | bit_parity,
+where bit_parity is calculated on (lock_val & 0x9B1ADEDF847D3481) vale: 0-even, 1-odd
+
+checked bits: 0,7,10,12,13,16,18,19,20,21,22,26,31,32,33,34,35,36,38,39,41,42,43,44,46,47,49,51,52,56,57,59,60,63
+checked buttons' bits: 0,12,18,35,41,47,52,59
+not checked buttons' bits: 1,6,23,24,29,30,53,58
+
+              6      5 5      4 4      4 3      3 3      2 2      1 1
+              3      6 5      8 7      0 9      2 1      4 3      6 5      8 7      0
+checked bits: 10011011 00011010 11011110 11011111 10000100 01111101 00110100 10000001
+button bits:  00001100 00110000 10000010 00001000 01100001 10000100 00010000 01000011
+button name:      2D     4F     6     8      A     1C    3 E    5      7      9    0B
+
+00404310 55              push    ebp
+00404311 8bec            mov     ebp,esp
+00404313 83ec10          sub     esp,10h
+00404316 53              push    ebx
+00404317 56              push    esi
+00404318 8bf1            mov     esi,ecx                                        ; lock_val
+0040431a 8b5e04          mov     ebx,dword ptr [esi+4]
+0040431d 57              push    edi
+0040431e 8b3e            mov     edi,dword ptr [esi]
+00404320 897df0          mov     dword ptr [ebp-10h],edi                        ; lock_val_lo
+00404323 895df4          mov     dword ptr [ebp-0Ch],ebx                        ; lock_val_hi
+00404326 81e781347d84    and     edi,847D3481h
+0040432c 81e3dfde1a9b    and     ebx,9B1ADEDFh                                  ; lock_val & 0x9B1ADEDF847D3481
+00404332 33c0            xor     eax,eax
+00404334 8945f8          mov     dword ptr [ebp-8],eax                          ; bit_cnt
+00404337 8945fc          mov     dword ptr [ebp-4],eax                          ; i=0
+0040433a 8d9b00000000    lea     ebx,[ebx]
+
+; count set checked bits loop
+00404340 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00404343 b801000000      mov     eax,1
+00404348 33d2            xor     edx,edx
+0040434a e8b1f43c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, i)
+0040434f 23c7            and     eax,edi
+00404351 23d3            and     edx,ebx
+00404353 0bc2            or      eax,edx
+00404355 7403            je      image00400000+0x435a (0040435a)
+; ((lock_val & 0x9B1ADEDF847D3481) & (1<<bit_in)) != 0
+00404357 ff45f8          inc     dword ptr [ebp-8]                              ; bit_cnt++
+0040435a 8b45fc          mov     eax,dword ptr [ebp-4]
+0040435d 40              inc     eax
+0040435e 8945fc          mov     dword ptr [ebp-4],eax                          ; i++
+00404361 83f840          cmp     eax,40h
+00404364 7cda            jl      image00400000+0x4340 (00404340)                ; loop 64 times
+
+00404366 8b45f0          mov     eax,dword ptr [ebp-10h]
+00404369 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+0040436c 0fa4c101        shld    ecx,eax,1
+00404370 03c0            add     eax,eax
+00404372 8906            mov     dword ptr [esi],eax                            ; lock_val = lock_val<<1
+00404374 8a45f8          mov     al,byte ptr [ebp-8]
+00404377 2401            and     al,1
+00404379 0fb6c0          movzx   eax,al
+0040437c 99              cdq
+0040437d 0906            or      dword ptr [esi],eax                            ; lock_val |= bit_cnt&1: bit parity of checked bits
+0040437f 894e04          mov     dword ptr [esi+4],ecx
+00404382 095604          or      dword ptr [esi+4],edx
+00404385 5f              pop     edi
+00404386 5e              pop     esi
+00404387 5b              pop     ebx
+00404388 8be5            mov     esp,ebp
+0040438a 5d              pop     ebp
+0040438b c3              ret
+
+--------------------------------------------------------------------------------
+is_lock_opened(ecx: &lock_val)
+The function check is a lock_val constitues the resolving lock value by checking:
+OR_PARITY(lock_val)==0xa3fe45adf1ec2ab4, where OR_PARITY() algo is defined as:
+  LOOP i=0..63 {
+    cnt=0;
+    LOOP j=0..7 {
+      if (lock_val & or_tab[i][j]) cnt++;
+    }
+    OR_PARITY at bit i = parity of cnt
+  }
+
+00404540 55              push    ebp
+00404541 8bec            mov     ebp,esp
+00404543 83ec28          sub     esp,28h
+00404546 33c0            xor     eax,eax
+00404548 53              push    ebx
+00404549 56              push    esi
+0040454a 8945e0          mov     dword ptr [ebp-20h],eax
+0040454d 8945e4          mov     dword ptr [ebp-1Ch],eax                        ; or_par=0, of type qword or_par
+00404550 8945f4          mov     dword ptr [ebp-0Ch],eax                        ; i=0, k=0
+00404553 57              push    edi
+00404554 894dec          mov     dword ptr [ebp-14h],ecx                        ; &lock_val
+00404557 b8b8109e00      mov     eax,offset image00400000+0x5e10b8 (009e10b8)   ; or_tab, of type qword or_tab[0x200]
+0040455c 8d642400        lea     esp,[esp]
+
+; loop over strings
+loop1:
+00404560 c645ff00        mov     byte ptr [ebp-1],0                             ; cnt=0
+00404564 8945f8          mov     dword ptr [ebp-8],eax                          ; &or_tab[k]
+00404567 c745f008000000  mov     dword ptr [ebp-10h],8                          ; n_str=8
+0040456e eb03            jmp     image00400000+0x4573 (00404573)
+
+; loop over string of positions in or_tab[] (8 elems long)
+loop2:
+00404570 8b45f8          mov     eax,dword ptr [ebp-8]
+00404573 8b18            mov     ebx,dword ptr [eax]
+00404575 8b4004          mov     eax,dword ptr [eax+4]
+00404578 c745e801000000  mov     dword ptr [ebp-18h],1
+0040457f 33ff            xor     edi,edi                                        ; j=0
+00404581 8945dc          mov     dword ptr [ebp-24h],eax
+
+; loop over single position in or_tab[]
+loop3:
+00404584 b801000000      mov     eax,1
+00404589 33d2            xor     edx,edx
+0040458b 8bcf            mov     ecx,edi
+0040458d e86ef23c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, j)
+00404592 8b75dc          mov     esi,dword ptr [ebp-24h]
+00404595 8bcb            mov     ecx,ebx
+00404597 23c8            and     ecx,eax
+00404599 23f2            and     esi,edx
+0040459b 0bce            or      ecx,esi
+0040459d 740c            je      image00400000+0x45ab (004045ab)                ; if ((or_tab[k]&(1<<j))==0) -> continue loop3
+
+; (or_tab[k] & (1<<j))!=0
+0040459f 8b4dec          mov     ecx,dword ptr [ebp-14h]
+004045a2 2301            and     eax,dword ptr [ecx]
+004045a4 235104          and     edx,dword ptr [ecx+4]
+004045a7 0bc2            or      eax,edx
+004045a9 740b            je      image00400000+0x45b6 (004045b6)                ; if ((lock_val&(1<<j))==0) goto unmatched
+
+004045ab 47              inc     edi                                            ; j++
+004045ac 83ff40          cmp     edi,40h
+004045af 7cd3            jl      image00400000+0x4584 (00404584)                ; if (j<64) goto loop3
+
+; whole or_tab[k] position matches lock_val at its 1's
+004045b1 8a45e8          mov     al,byte ptr [ebp-18h]                          ; matched=1
+004045b4 eb02            jmp     image00400000+0x45b8 (004045b8)
+unmatched:
+004045b6 33c0            xor     eax,eax                                        ; matched=0
+004045b8 0045ff          add     byte ptr [ebp-1],al                            ; cnt += matched
+
+004045bb 8345f808        add     dword ptr [ebp-8],8                            ; k++
+004045bf ff4df0          dec     dword ptr [ebp-10h]
+004045c2 75ac            jne     image00400000+0x4570 (00404570)                ; if (--n_str) goto loop2
+
+004045c4 0fb64dff        movzx   ecx,byte ptr [ebp-1]
+004045c8 81e101000080    and     ecx,80000001h                                  ; cnt&1: parity of matches
+004045ce 7905            jns     image00400000+0x45d5 (004045d5)
+004045d0 49              dec     ecx
+004045d1 83c9fe          or      ecx,0FFFFFFFEh
+004045d4 41              inc     ecx
+004045d5 84c9            test    cl,cl
+004045d7 7415            je      image00400000+0x45ee (004045ee)
+
+; if ((cnt&1)!=0) or_par|=1<<i
+004045d9 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+004045dc b801000000      mov     eax,1
+004045e1 33d2            xor     edx,edx
+004045e3 e818f23c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, i)
+004045e8 0945e0          or      dword ptr [ebp-20h],eax
+004045eb 0955e4          or      dword ptr [ebp-1Ch],edx
+
+004045ee 8b45f8          mov     eax,dword ptr [ebp-8]
+004045f1 ff45f4          inc     dword ptr [ebp-0Ch]                            ; i++
+004045f4 3db8209e00      cmp     eax,offset image00400000+0x5e20b8 (009e20b8)
+004045f9 0f8c61ffffff    jl      image00400000+0x4560 (00404560)                ; if (k<0x200) goto loop1
+
+004045ff 817de0b42aecf1  cmp     dword ptr [ebp-20h],0F1EC2AB4h
+00404606 5f              pop     edi
+00404607 5e              pop     esi
+00404608 5b              pop     ebx
+00404609 7512            jne     image00400000+0x461d (0040461d)
+0040460b 817de4ad45fea3  cmp     dword ptr [ebp-1Ch],0A3FE45ADh
+00404612 7509            jne     image00400000+0x461d (0040461d)                ; if (or_par!=0xA3FE45ADF1EC2AB4) goto lock_closed
+lock_opened:
+00404614 b801000000      mov     eax,1
+00404619 8be5            mov     esp,ebp
+0040461b 5d              pop     ebp
+0040461c c3              ret
+lock_closed:
+0040461d 33c0            xor     eax,eax
+0040461f 8be5            mov     esp,ebp
+00404621 5d              pop     ebp
+00404622 c3              ret
+
+--------------------------------------------------------------------------------
+get_btn_states()
+Get bits from 64-bit lock_val constituting the button states:
+lock_val bits: 1,30,59,24,53,18,47,12,41,6,35,0,29,58,23,52 -> (1+n*29)%63, n=0,...,15
+into output bits: 0,1,...,15
+
+00404390 55              push    ebp
+00404391 8bec            mov     ebp,esp
+00404393 83ec08          sub     esp,8
+00404396 53              push    ebx
+00404397 8b5904          mov     ebx,dword ptr [ecx+4]                          ; lock_val_hi
+0040439a 56              push    esi
+0040439b 57              push    edi
+0040439c 8b39            mov     edi,dword ptr [ecx]                            ; lock_val_lo
+0040439e c745fc00000000  mov     dword ptr [ebp-4],0                            ; states=0
+004043a5 be01000000      mov     esi,1                                          ; bit_in=1
+004043aa c745f802000000  mov     dword ptr [ebp-8],2                            ; bit_out=2
+
+calc_loop:
+004043b1 b801000000      mov     eax,1
+004043b6 33d2            xor     edx,edx
+004043b8 8bce            mov     ecx,esi
+004043ba e841f43c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_in)
+004043bf 23c7            and     eax,edi
+004043c1 23d3            and     edx,ebx                                        ; lock_val & (1<<bit_in)
+004043c3 0bc2            or      eax,edx
+004043c5 7415            je      image00400000+0x43dc (004043dc)
+; (lock_val & (1<<bit_in)) != 0
+004043c7 8b4df8          mov     ecx,dword ptr [ebp-8]
+004043ca 83c1fe          add     ecx,0FFFFFFFEh
+004043cd b801000000      mov     eax,1
+004043d2 33d2            xor     edx,edx
+004043d4 e827f43c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_out-2)
+004043d9 0945fc          or      dword ptr [ebp-4],eax                          ; states |= 1<<(bit_out-2)
+
+004043dc 83c61d          add     esi,1Dh
+004043df 81e63f000080    and     esi,8000003Fh                                  ; bit_in = (bit_in+29)%63
+004043e5 7905            jns     image00400000+0x43ec (004043ec)
+004043e7 4e              dec     esi
+004043e8 83cec0          or      esi,0FFFFFFC0h
+004043eb 46              inc     esi
+004043ec b801000000      mov     eax,1
+004043f1 33d2            xor     edx,edx
+004043f3 8bce            mov     ecx,esi
+004043f5 e806f43c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_in)
+004043fa 23c7            and     eax,edi
+004043fc 23d3            and     edx,ebx
+004043fe 0bc2            or      eax,edx
+00404400 7413            je      image00400000+0x4415 (00404415)
+; (lock_val & (1<<bit_in)) != 0
+00404402 8b4df8          mov     ecx,dword ptr [ebp-8]
+00404405 49              dec     ecx
+00404406 b801000000      mov     eax,1
+0040440b 33d2            xor     edx,edx
+0040440d e8eef33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_out-1)
+00404412 0945fc          or      dword ptr [ebp-4],eax                          ; states |= 1<<(bit_out-1)
+
+00404415 83c61d          add     esi,1Dh
+00404418 81e63f000080    and     esi,8000003Fh                                  ; bit_in = (bit_in+29)%63
+0040441e 7905            jns     image00400000+0x4425 (00404425)
+00404420 4e              dec     esi
+00404421 83cec0          or      esi,0FFFFFFC0h
+00404424 46              inc     esi
+00404425 b801000000      mov     eax,1
+0040442a 33d2            xor     edx,edx
+0040442c 8bce            mov     ecx,esi
+0040442e e8cdf33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_in)
+00404433 23c7            and     eax,edi
+00404435 23d3            and     edx,ebx
+00404437 0bc2            or      eax,edx
+00404439 7412            je      image00400000+0x444d (0040444d)
+; (lock_val & (1<<bit_in)) != 0
+0040443b 8b4df8          mov     ecx,dword ptr [ebp-8]
+0040443e b801000000      mov     eax,1
+00404443 33d2            xor     edx,edx
+00404445 e8b6f33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_out)
+0040444a 0945fc          or      dword ptr [ebp-4],eax                          ; states |= 1<<bit_out
+
+0040444d 83c61d          add     esi,1Dh
+00404450 81e63f000080    and     esi,8000003Fh                                  ; bit_in = (bit_in+29)%63
+00404456 7905            jns     image00400000+0x445d (0040445d)
+00404458 4e              dec     esi
+00404459 83cec0          or      esi,0FFFFFFC0h
+0040445c 46              inc     esi
+0040445d b801000000      mov     eax,1
+00404462 33d2            xor     edx,edx
+00404464 8bce            mov     ecx,esi
+00404466 e895f33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_in)
+0040446b 23c7            and     eax,edi
+0040446d 23d3            and     edx,ebx
+0040446f 0bc2            or      eax,edx
+00404471 7413            je      image00400000+0x4486 (00404486)
+; (lock_val & (1<<bit_in)) != 0
+00404473 8b4df8          mov     ecx,dword ptr [ebp-8]
+00404476 41              inc     ecx
+00404477 b801000000      mov     eax,1
+0040447c 33d2            xor     edx,edx
+0040447e e87df33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64((qword)1, bit_out+1)
+00404483 0945fc          or      dword ptr [ebp-4],eax                          ; states |= (bit_out+1)
+
+00404486 83c61d          add     esi,1Dh
+00404489 81e63f000080    and     esi,8000003Fh                                  ; bit_in = (bit_in+29)%63
+0040448f 7905            jns     image00400000+0x4496 (00404496)
+00404491 4e              dec     esi
+00404492 83cec0          or      esi,0FFFFFFC0h
+00404495 46              inc     esi
+00404496 8b45f8          mov     eax,dword ptr [ebp-8]
+00404499 83c004          add     eax,4
+0040449c 8945f8          mov     dword ptr [ebp-8],eax                          ; bit_out += 4
+0040449f 83c0fe          add     eax,0FFFFFFFEh
+004044a2 83f810          cmp     eax,10h
+004044a5 0f8c06ffffff    jl      image00400000+0x43b1 (004043b1)                ; if (bit_out-2 < 16) goto calc_loop;   loop 16 times
+
+004044ab 8b45fc          mov     eax,dword ptr [ebp-4]                          ; return states
+004044ae 5f              pop     edi
+004044af 5e              pop     esi
+004044b0 5b              pop     ebx
+004044b1 8be5            mov     esp,ebp
+004044b3 5d              pop     ebp
+004044b4 c3              ret
+
+--------------------------------------------------------------------------------
+set_btn_states()
+Set button states in lock_val; see get_btn_states() for more details related to bit representation
+
+004044c0 55              push    ebp
+004044c1 8bec            mov     ebp,esp
+004044c3 83ec08          sub     esp,8
+004044c6 53              push    ebx
+004044c7 56              push    esi
+004044c8 33db            xor     ebx,ebx
+004044ca 57              push    edi
+004044cb 8bf1            mov     esi,ecx
+004044cd bf01000000      mov     edi,1
+004044d2 895dfc          mov     dword ptr [ebp-4],ebx
+
+004044d5 b801000000      mov     eax,1
+004044da 33d2            xor     edx,edx
+004044dc 8bcb            mov     ecx,ebx
+004044de e81df33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64()
+004044e3 234508          and     eax,dword ptr [ebp+8]
+004044e6 2355fc          and     edx,dword ptr [ebp-4]
+004044e9 8bcf            mov     ecx,edi
+004044eb 0bc2            or      eax,edx
+004044ed b801000000      mov     eax,1
+004044f2 740e            je      image00400000+0x4502 (00404502)
+004044f4 33d2            xor     edx,edx
+004044f6 e805f33c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64()
+004044fb 0906            or      dword ptr [esi],eax
+004044fd 095604          or      dword ptr [esi+4],edx
+00404500 eb10            jmp     image00400000+0x4512 (00404512)
+00404502 33d2            xor     edx,edx
+00404504 e8f7f23c00      call    image00400000+0x3d3800 (007d3800)              ; l_shift_64()
+00404509 f7d0            not     eax
+0040450b 2106            and     dword ptr [esi],eax
+0040450d f7d2            not     edx
+0040450f 215604          and     dword ptr [esi+4],edx
+00404512 83c71d          add     edi,1Dh
+00404515 81e73f000080    and     edi,8000003Fh
+0040451b 7905            jns     image00400000+0x4522 (00404522)
+0040451d 4f              dec     edi
+0040451e 83cfc0          or      edi,0FFFFFFC0h
+00404521 47              inc     edi
+00404522 43              inc     ebx
+00404523 83fb10          cmp     ebx,10h
+00404526 7cad            jl      image00400000+0x44d5 (004044d5)
+
+00404528 5f              pop     edi
+00404529 5e              pop     esi
+0040452a 5b              pop     ebx
+0040452b 8be5            mov     esp,ebp
+0040452d 5d              pop     ebp
+0040452e c20400          ret     4
+
+--------------------------------------------------------------------------------
+l_shift_64(edx, ecx, cl): shifts qword (edx:eax) by cl bits left
+
+007d3800 80f940          cmp     cl,40h
+007d3803 7315            jae     image00400000+0x3d381a (007d381a)
+007d3805 80f920          cmp     cl,20h
+007d3808 7306            jae     image00400000+0x3d3810 (007d3810)
+007d380a 0fa5c2          shld    edx,eax,cl
+007d380d d3e0            shl     eax,cl
+007d380f c3              ret
+007d3810 8bd0            mov     edx,eax
+007d3812 33c0            xor     eax,eax
+007d3814 80e11f          and     cl,1Fh
+007d3817 d3e2            shl     edx,cl
+007d3819 c3              ret
+007d381a 33c0            xor     eax,eax
+007d381c 33d2            xor     edx,edx
+007d381e c3              ret

@@ -1,0 +1,235 @@
+;
+; module' main()  (called from MS runtime lib)
+;
+00401190 55              push    ebp
+00401191 8bec            mov     ebp,esp
+00401193 6a00            push    0
+00401195 6880184000      push    offset image00400000+0x1880 (00401880)         ; DlgProc
+0040119a 6a00            push    0
+0040119c 6a67            push    67h
+0040119e ff7508          push    dword ptr [ebp+8]
+004011a1 ff153ce14000    call    dword ptr [image00400000+0xe13c (0040e13c)]
+004011a7 33c0            xor     eax,eax
+004011a9 5d              pop     ebp
+004011aa c21000          ret     10h
+
+;
+; DlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+; - Checks stage 1 password (WM_COMMAND->Control ID:1) against "Lets do this". For
+;   stage 2 password it's only checked against fake paswd: "I did it!"
+; - WM_INITDIALOG: initializes 2nd stage edit by call to init_ed2(). Also key value
+;   (used by the remote thread) is initialized with some random value.
+;
+00401880 55              push    ebp
+00401881 8bec            mov     ebp,esp
+00401883 6aff            push    0FFFFFFFFh
+00401885 688cd04000      push    offset image00400000+0xd08c (0040d08c)
+0040188a 64a100000000    mov     eax,dword ptr fs:[00000000h]
+00401890 50              push    eax
+00401891 81ec90000000    sub     esp,90h
+00401897 a1b0404100      mov     eax,dword ptr [image00400000+0x140b0 (004140b0)]
+0040189c 33c5            xor     eax,ebp
+0040189e 8945f0          mov     dword ptr [ebp-10h],eax
+004018a1 53              push    ebx
+004018a2 56              push    esi
+004018a3 57              push    edi
+004018a4 50              push    eax
+004018a5 8d45f4          lea     eax,[ebp-0Ch]
+004018a8 64a300000000    mov     dword ptr fs:[00000000h],eax
+
+004018ae 8b450c          mov     eax,dword ptr [ebp+0Ch]
+004018b1 8b7d08          mov     edi,dword ptr [ebp+8]                          ; hwndDlg
+004018b4 2d10010000      sub     eax,110h
+004018b9 0f84a4010000    je      image00400000+0x1a63 (00401a63)
+004018bf 48              dec     eax
+004018c0 7576            jne     image00400000+0x1938 (00401938)                ; msg_unhandled
+
+; WM_COMMAND
+004018c2 8b4510          mov     eax,dword ptr [ebp+10h]                        ; wParam
+004018c5 6683f801        cmp     ax,1
+004018c9 7574            jne     image00400000+0x193f (0040193f)
+
+; Control ID:1 (1st stage "check" button)
+004018cb 8b1d34e14000    mov     ebx,dword ptr [image00400000+0xe134 (0040e134)]    ; USER32!GetDlgItem
+004018d1 6880000000      push    80h
+004018d6 8d856cffffff    lea     eax,[ebp-94h]
+004018dc 50              push    eax
+004018dd 68e9030000      push    3E9h
+004018e2 57              push    edi
+004018e3 ffd3            call    ebx
+004018e5 50              push    eax
+004018e6 ff1530e14000    call    dword ptr [image00400000+0xe130 (0040e130)]    ; USER32!GetWindowTextA(): text from the 1st stage edit (ed1_txt)
+004018ec 68d4254100      push    offset image00400000+0x125d4 (004125d4)
+004018f1 8d856cffffff    lea     eax,[ebp-94h]
+004018f7 50              push    eax
+004018f8 ff152ce04000    call    dword ptr [image00400000+0xe02c (0040e02c)]    ; kernel32!lstrcmpA(ed1_txt, "Lets do this")
+004018fe 85c0            test    eax,eax
+00401900 7536            jne     image00400000+0x1938 (00401938)                ; msg_unhandled
+; 1st stage passed (disable 1st stage controls and enable 2nd stage ones)
+00401902 50              push    eax
+00401903 6a01            push    1
+00401905 57              push    edi
+00401906 ffd3            call    ebx                                            ; USER32!GetDlgItem()
+00401908 8b3538e14000    mov     esi,dword ptr [image00400000+0xe138 (0040e138)]    ; USER32!EnableWindow
+0040190e 50              push    eax
+0040190f ffd6            call    esi
+00401911 6a00            push    0
+00401913 68e9030000      push    3E9h
+00401918 57              push    edi
+00401919 ffd3            call    ebx
+0040191b 50              push    eax
+0040191c ffd6            call    esi
+0040191e 6a01            push    1
+00401920 68eb030000      push    3EBh
+00401925 57              push    edi
+00401926 ffd3            call    ebx
+00401928 50              push    eax
+00401929 ffd6            call    esi
+0040192b 6a01            push    1
+0040192d 68ea030000      push    3EAh
+00401932 57              push    edi
+00401933 ffd3            call    ebx
+00401935 50              push    eax
+00401936 ffd6            call    esi
+
+msg_unhandled:
+00401938 33c0            xor     eax,eax
+0040193a e97a010000      jmp     image00400000+0x1ab9 (00401ab9)                ; goto finish
+
+0040193f b9eb030000      mov     ecx,3EBh
+00401944 663bc1          cmp     ax,cx
+00401947 0f8500010000    jne     image00400000+0x1a4d (00401a4d)
+
+; Control ID:0x3EB (2nd stage "check" button)
+0040194d 6a08            push    8
+0040194f e81a2d0000      call    image00400000+0x466e (0040466e)                ; b64_buf = malloc(8), of type struct { byte *data; dword len }
+00401954 83c404          add     esp,4
+00401957 898568ffffff    mov     dword ptr [ebp-98h],eax
+0040195d c745fc00000000  mov     dword ptr [ebp-4],0
+00401964 85c0            test    eax,eax
+00401966 7410            je      image00400000+0x1978 (00401978)
+00401968 68e4254100      push    offset image00400000+0x125e4 (004125e4)        ; b64_str: "SSBkaWQgaXQh": "I did it!"
+0040196d 8bc8            mov     ecx,eax
+0040196f e83c270000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(ecx:b64_buf, b64_str)
+00401974 8bf0            mov     esi,eax
+00401976 eb02            jmp     image00400000+0x197a (0040197a)
+00401978 33f6            xor     esi,esi
+0040197a c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00401981 89b568ffffff    mov     dword ptr [ebp-98h],esi
+00401987 85f6            test    esi,esi
+00401989 74ad            je      image00400000+0x1938 (00401938)                ; if malloc problem -> goto msg_unhandled
+0040198b 8b1d34e14000    mov     ebx,dword ptr [image00400000+0xe134 (0040e134)]
+00401991 6880000000      push    80h
+00401996 8d856cffffff    lea     eax,[ebp-94h]
+0040199c 50              push    eax
+0040199d 68ea030000      push    3EAh
+004019a2 57              push    edi
+004019a3 ffd3            call    ebx
+004019a5 50              push    eax
+004019a6 ff1530e14000    call    dword ptr [image00400000+0xe130 (0040e130)]    ; USER32!GetWindowTextA(): text from the 2nd stage edit (ed2_txt)
+004019ac 837e0400        cmp     dword ptr [esi+4],0
+004019b0 0f8488000000    je      image00400000+0x1a3e (00401a3e)
+004019b6 ff36            push    dword ptr [esi]
+004019b8 8d856cffffff    lea     eax,[ebp-94h]
+004019be 50              push    eax
+004019bf ff152ce04000    call    dword ptr [image00400000+0xe02c (0040e02c)]    ; kernel32!lstrcmpA(): compare with "I did it!"
+004019c5 85c0            test    eax,eax
+004019c7 7575            jne     image00400000+0x1a3e (00401a3e)
+; fake password - disable 2nd stage constrols and show a message box
+004019c9 50              push    eax
+004019ca 68eb030000      push    3EBh
+004019cf 57              push    edi
+004019d0 ffd3            call    ebx
+004019d2 8b3538e14000    mov     esi,dword ptr [image00400000+0xe138 (0040e138)]
+004019d8 50              push    eax
+004019d9 ffd6            call    esi                                            ; USER32!EnableWindow(): disable 2nd stage button
+004019db 6a00            push    0
+004019dd 68ea030000      push    3EAh
+004019e2 57              push    edi
+004019e3 ffd3            call    ebx
+004019e5 50              push    eax
+004019e6 ffd6            call    esi                                            ; USER32!EnableWindow(): disable 2nd stage edit
+004019e8 6a08            push    8
+004019ea e87f2c0000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+004019ef 83c404          add     esp,4
+004019f2 898564ffffff    mov     dword ptr [ebp-9Ch],eax
+004019f8 c745fc01000000  mov     dword ptr [ebp-4],1
+004019ff 85c0            test    eax,eax
+00401a01 740e            je      image00400000+0x1a11 (00401a11)
+00401a03 68f4254100      push    offset image00400000+0x125f4 (004125f4)        ; "Tm9wZSB5b3UgZGlkbid0Lg==": "Nope you didn't"
+00401a08 8bc8            mov     ecx,eax
+00401a0a e8a1260000      call    image00400000+0x40b0 (004040b0)                ; b64_decode()
+00401a0f eb02            jmp     image00400000+0x1a13 (00401a13)
+00401a11 33c0            xor     eax,eax
+00401a13 898564ffffff    mov     dword ptr [ebp-9Ch],eax
+00401a19 85c0            test    eax,eax
+00401a1b 7421            je      image00400000+0x1a3e (00401a3e)                ; malloc problem -> don't show msg box
+00401a1d 83780400        cmp     dword ptr [eax+4],0
+00401a21 7410            je      image00400000+0x1a33 (00401a33)
+00401a23 6a00            push    0
+00401a25 6810264100      push    offset image00400000+0x12610 (00412610)
+00401a2a ff30            push    dword ptr [eax]
+00401a2c 57              push    edi
+00401a2d ff152ce14000    call    dword ptr [image00400000+0xe12c (0040e12c)]    ; USER32!MessageBoxA(): show "Nope you didn't"
+00401a33 8d8d64ffffff    lea     ecx,[ebp-9Ch]
+00401a39 e872f7ffff      call    image00400000+0x11b0 (004011b0)                ; free()
+
+00401a3e 8d8d68ffffff    lea     ecx,[ebp-98h]
+00401a44 e867f7ffff      call    image00400000+0x11b0 (004011b0)                ; free()
+00401a49 33c0            xor     eax,eax
+00401a4b eb6c            jmp     image00400000+0x1ab9 (00401ab9)                ; finish
+
+00401a4d 6683f802        cmp     ax,2
+00401a51 0f85e1feffff    jne     image00400000+0x1938 (00401938)                ; msg_unhandled
+
+; Control ID:2 (not exists)
+00401a57 6aff            push    0FFFFFFFFh
+00401a59 6aff            push    0FFFFFFFFh
+00401a5b ff1530e04000    call    dword ptr [image00400000+0xe030 (0040e030)]    ; kernel32!TerminateProcess()
+00401a61 eb51            jmp     image00400000+0x1ab4 (00401ab4)                ; msg_handled
+
+; WM_INITDIALOG
+00401a63 b8fdc309df      mov     eax,0DF09C3FDh
+00401a68 57              push    edi
+00401a69 e8820d0000      call    image00400000+0x27f0 (004027f0)                    ; init_ed2(hwndDlg)
+00401a6e 893d4c7c4100    mov     dword ptr [image00400000+0x17c4c (00417c4c)],edi   ; hwndDlg
+
+; try to remove "SeDebugPrivilege" privilege of the process to disable attaching a debugger
+; doesn't affect already debugged process; doesn't work on XP
+00401a74 e8e7f8ffff      call    image00400000+0x1360 (00401360)
+
+00401a79 b850184000      mov     eax,offset image00400000+0x1850 (00401850)         ; end of the remote code region
+00401a7e 2d10144000      sub     eax,offset image00400000+0x1410 (00401410)         ; start of the remote code region
+00401a83 a3487c4100      mov     dword ptr [image00400000+0x17c48 (00417c48)],eax   ; g_remote_code_size set to the remote code size (0x440)
+
+; prepare the "key" value (used by the remote thread on the last stage of the crackme)
+00401a88 0f31            rdtsc                                                      ; timestamp MSR in edx:eax
+00401a8a 50              push    eax
+00401a8b e8262b0000      call    image00400000+0x45b6 (004045b6)                    ; init rand. gen using the timestamp
+00401a90 e8fe2a0000      call    image00400000+0x4593 (00404593)                ; rand()%0xffff
+00401a95 8bf0            mov     esi,eax
+00401a97 c1e610          shl     esi,10h
+00401a9a e8f42a0000      call    image00400000+0x4593 (00404593)                ; rand()%0xffff
+00401a9f 03c6            add     eax,esi
+00401aa1 50              push    eax                                            ; key_val
+00401aa2 68cc254100      push    offset image00400000+0x125cc (004125cc)
+00401aa7 68e07d4100      push    offset image00400000+0x17de0 (00417de0)
+00401aac e8152b0000      call    image00400000+0x45c6 (004045c6)                ; sprintf(g_key_val, "%0.8X", key_val): set the key value
+00401ab1 83c410          add     esp,10h
+
+msg_handled:
+00401ab4 b801000000      mov     eax,1
+
+finish:
+00401ab9 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+00401abc 64890d00000000  mov     dword ptr fs:[0],ecx
+00401ac3 59              pop     ecx
+00401ac4 5f              pop     edi
+00401ac5 5e              pop     esi
+00401ac6 5b              pop     ebx
+00401ac7 8b4df0          mov     ecx,dword ptr [ebp-10h]
+00401aca 33cd            xor     ecx,ebp
+00401acc e8d6280000      call    image00400000+0x43a7 (004043a7)
+00401ad1 8be5            mov     esp,ebp
+00401ad3 5d              pop     ebp
+00401ad4 c21000          ret     10h

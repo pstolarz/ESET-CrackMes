@@ -1,0 +1,179 @@
+;
+; chk_stage3(ecx:h_lib) - callback function CRC32: 0xDEADBEEF
+;
+; The returned buf[] must contains 32-bit integers encoded as hex strings (8 chars each
+; one) and concatenated together into one string. The procedure decodes the integers
+; and processes them via 32-bit RSA algorithm with a public exponent e:0x10001 and
+; a modulus:0xE2D797F9. The lower words are treated as unicode characters which shall
+; match a user name (as returned by GetUserNameW()) to success the check.
+;
+; To reverse the RSA and find d:=e^(-1), there is a need to factorize the modulus:
+;   e = 0x10001 = 65537
+;   n = 0xE2D797F9 = 3805779961 = 46091*82571 = p*q
+;   phi(n) = (p-1)(q-1) = 46090*82570 = 3805651300, where phi(n) is the Euler's totient function
+;   The extended euclidean algo gives: =(-19239)*phi(n)+(1117184573)*e = gcd(phi(n),e) = 1
+;   d = 1117184573 = 0x4296E23D
+;
+00401c70 55              push    ebp
+00401c71 8bec            mov     ebp,esp
+00401c73 b82c160000      mov     eax,162Ch
+00401c78 e8838b0000      call    image00400000+0xa800 (0040a800)
+00401c7d a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+00401c82 33c5            xor     eax,ebp
+00401c84 8945fc          mov     dword ptr [ebp-4],eax
+00401c87 53              push    ebx
+00401c88 56              push    esi
+00401c89 57              push    edi
+00401c8a 8bf1            mov     esi,ecx
+00401c8c 68efbeadde      push    0DEADBEEFh
+00401c91 e83af4ffff      call    image00400000+0x10d0 (004010d0)                ; get_proc_addr_crc(esi:h_lib, 0xDEADBEEF)
+00401c96 8bf0            mov     esi,eax
+00401c98 33db            xor     ebx,ebx
+00401c9a 83c404          add     esp,4
+00401c9d 3bf3            cmp     esi,ebx
+00401c9f 7513            jne     image00400000+0x1cb4 (00401cb4)
+; export not found
+00401ca1 32c0            xor     al,al
+00401ca3 5f              pop     edi
+00401ca4 5e              pop     esi
+00401ca5 5b              pop     ebx
+00401ca6 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401ca9 33cd            xor     ecx,ebp
+00401cab e84b080000      call    image00400000+0x24fb (004024fb)
+00401cb0 8be5            mov     esp,ebp
+00401cb2 5d              pop     ebp
+00401cb3 c3              ret
+; export has been found
+00401cb4 68ff0f0000      push    0FFFh
+00401cb9 8d85e9e9ffff    lea     eax,[ebp-1617h]
+00401cbf 53              push    ebx
+00401cc0 50              push    eax
+00401cc1 889de8e9ffff    mov     byte ptr [ebp-1618h],bl
+00401cc7 e8f46e0000      call    image00400000+0x8bc0 (00408bc0)                ; memset(): clear buf[] of type byte buf[0x1000]
+00401ccc 83c40c          add     esp,0Ch
+00401ccf 6800100000      push    1000h
+00401cd4 8d8de8e9ffff    lea     ecx,[ebp-1618h]
+00401cda 51              push    ecx
+00401cdb ffd6            call    esi                                            ; h_lib!stage3_callback(buf, 0x1000)
+00401cdd 33c0            xor     eax,eax
+00401cdf 68fe030000      push    3FEh
+00401ce4 8945ed          mov     dword ptr [ebp-13h],eax
+00401ce7 8945f1          mov     dword ptr [ebp-0Fh],eax
+00401cea 8945f5          mov     dword ptr [ebp-0Bh],eax
+00401ced 668945f9        mov     word ptr [ebp-7],ax
+00401cf1 8845fb          mov     byte ptr [ebp-5],al
+00401cf4 8d85eaf9ffff    lea     eax,[ebp-616h]
+00401cfa 33d2            xor     edx,edx
+00401cfc 53              push    ebx
+00401cfd 50              push    eax
+00401cfe 885dec          mov     byte ptr [ebp-14h],bl
+00401d01 33f6            xor     esi,esi                                        ; i=0 (loop index)
+00401d03 668995e8f9ffff  mov     word ptr [ebp-618h],dx
+00401d0a e8b16e0000      call    image00400000+0x8bc0 (00408bc0)                ; memset(): clear usr[] of type word usr[0x200]
+00401d0f 83c40c          add     esp,0Ch
+
+; usr[] buf calculation loop
+; index i over buf[] (starts at 0) by bytes, index j (starts at 0) over usr[] by words
+calc_usr_buf:
+00401d12 389c35e8e9ffff  cmp     byte ptr [ebp+esi-1618h],bl
+00401d19 0f8488000000    je      image00400000+0x1da7 (00401da7)                ; if(buf[i]==0) goto calc_usr_buf_finish   (end of data)
+00401d1f 8b8c35e8e9ffff  mov     ecx,dword ptr [ebp+esi-1618h]                  ; *(dword*)buf[i]
+00401d26 8b9435ece9ffff  mov     edx,dword ptr [ebp+esi-1614h]                  ; *(dword*)buf[i+4]
+00401d2d 8d85dce9ffff    lea     eax,[ebp-1624h]
+00401d33 50              push    eax                                            ; arg: &num (of type dword)
+00401d34 894dec          mov     dword ptr [ebp-14h],ecx                        ; conv_buf[0] = *(dword*)buf[i] (of type dword conv_buf[2])
+00401d37 8d4dec          lea     ecx,[ebp-14h]
+00401d3a 6828ee4000      push    offset image00400000+0xee28 (0040ee28)         ; arg: -> "%08X"
+00401d3f 51              push    ecx                                            ; arg: conv_buf
+00401d40 8955f0          mov     dword ptr [ebp-10h],edx                        ; conv_buf[1] = *(dword*)buf[i+4]
+00401d43 899ddce9ffff    mov     dword ptr [ebp-1624h],ebx                      ; num=0
+00401d49 e8ae080000      call    image00400000+0x25fc (004025fc)                ; sscanf(conv_buf, "%08X", &num)
+00401d4e 8bbddce9ffff    mov     edi,dword ptr [ebp-1624h]                      ; num of decoded hex
+00401d54 83c40c          add     esp,0Ch
+
+; result of the following computation is:
+;
+; usr[j] = (word)(((num^0x10000)%m)*num)%m = (word)(num^0x10001)%m, where m=0xE2D797F9
+; 0x10001 is a classic public exponent for RSA 32-bit algo
+;
+00401d57 53              push    ebx
+00401d58 68f997d7e2      push    0E2D797F9h
+00401d5d 53              push    ebx
+00401d5e 6800000100      push    10000h
+00401d63 53              push    ebx
+00401d64 57              push    edi
+
+; r = expmod(LODWORD(b), HIDWORD(b), LODWORD(e), HIDWORD(e), LODWORD(m), HIDWORD(m))
+; r = (b^e)%m, where b,e,m,r are 64-bit numbers; eax:=LODWORD(r), edx:=HIDWORD(r)
+00401d65 e876feffff      call    image00400000+0x1be0 (00401be0)                ; edx:eax = expmod(num, 0, 0x10000, 0, 0xE2D797F9, 0)
+00401d6a 83c418          add     esp,18h
+00401d6d 53              push    ebx
+00401d6e 57              push    edi
+00401d6f 52              push    edx
+00401d70 50              push    eax
+
+; r = mul(LODWORD(a), HIDWORD(a), LODWORD(b), HIDWORD(b))
+; r = a*b, where a,b,r are 64-bit numbers; eax:=LODWORD(r), edx:=HIDWORD(r)
+00401d71 e8ea760000      call    image00400000+0x9460 (00409460)                ; edx:eax = mul(eax, edx, num, 0);
+00401d76 33db            xor     ebx,ebx
+00401d78 53              push    ebx
+00401d79 68f997d7e2      push    0E2D797F9h
+00401d7e 52              push    edx
+00401d7f 50              push    eax
+
+; r = mod(LODWORD(a), HIDWORD(a), LODWORD(b), HIDWORD(b))
+; r = a%b, where a,b,r are 64-bit numbers; eax:=LODWORD(r), edx:=HIDWORD(r)
+00401d80 e8fba30000      call    image00400000+0xc180 (0040c180)                ; edx:eax = mod(eax, edx, 0xE2D797F9, 0);
+00401d85 8995dce9ffff    mov     dword ptr [ebp-1624h],edx
+00401d8b 8bd6            mov     edx,esi
+00401d8d c1ea03          shr     edx,3
+00401d90 83c608          add     esi,8                                          ; i+=8
+00401d93 66898455e8f9ffff mov     word ptr [ebp+edx*2-618h],ax                  ; usr[j++] = (word)eax  (j-th char of the user's name)
+00401d9b 81fe00100000    cmp     esi,1000h
+00401da1 0f8c6bffffff    jl      image00400000+0x1d12 (00401d12)                ; if (i<0x1000) goto calc_usr_buf
+
+calc_usr_buf_finish:
+00401da7 8d85e4e9ffff    lea     eax,[ebp-161Ch]
+00401dad 50              push    eax
+00401dae 8d8de8fdffff    lea     ecx,[ebp-218h]                                 ; word usr_name[0x100]
+00401db4 51              push    ecx
+00401db5 c785e4e9ffff00010000 mov dword ptr [ebp-161Ch],100h                    ; sz_usr_name = 0x100 (size of the usr_name[] buf in unicode chars)
+00401dbf ff1500d04000    call    dword ptr [image00400000+0xd000 (0040d000)]    ; ADVAPI32!GetUserNameW(usr_name, &sz_usr_name)
+
+; checking loop; index i (starts at 0) over unicode chars
+; usr[] must contain logged user name to pass the check
+00401dc5 8d95e8f9ffff    lea     edx,[ebp-618h]                                 ; &usr[i]
+00401dcb 8d8de8fdffff    lea     ecx,[ebp-218h]                                 ; &usr_name[i]
+loop_check:
+00401dd1 668b01          mov     ax,word ptr [ecx]
+00401dd4 663b02          cmp     ax,word ptr [edx]
+00401dd7 751e            jne     image00400000+0x1df7 (00401df7)                ; if (usr_name[i] != usr[i]) goto check_failed
+00401dd9 663bc3          cmp     ax,bx
+00401ddc 7415            je      image00400000+0x1df3 (00401df3)                ; if (usr_name[i]==0) goto check_success   (on the end of user name)
+00401dde 668b4102        mov     ax,word ptr [ecx+2]
+00401de2 663b4202        cmp     ax,word ptr [edx+2]
+00401de6 750f            jne     image00400000+0x1df7 (00401df7)                ; if (usr_name[i+1] != usr[i+1]) goto check_failed
+00401de8 83c104          add     ecx,4
+00401deb 83c204          add     edx,4                                          ; i+=2
+00401dee 663bc3          cmp     ax,bx
+00401df1 75de            jne     image00400000+0x1dd1 (00401dd1)                ; loop_check
+
+check_success:
+; stage 3 passed
+00401df3 33c0            xor     eax,eax
+00401df5 eb05            jmp     image00400000+0x1dfc (00401dfc)
+check_failed:
+; stage 3 failed
+00401df7 1bc0            sbb     eax,eax
+00401df9 83d8ff          sbb     eax,0FFFFFFFFh                                 ; eax==1 or -1
+00401dfc 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401dff 3bc3            cmp     eax,ebx
+00401e01 5f              pop     edi
+00401e02 0f94c0          sete    al                                             ; ret=1 if and only if eax==0
+00401e05 5e              pop     esi
+00401e06 33cd            xor     ecx,ebp
+00401e08 5b              pop     ebx
+00401e09 e8ed060000      call    image00400000+0x24fb (004024fb)
+00401e0e 8be5            mov     esp,ebp
+00401e10 5d              pop     ebp
+00401e11 c3              ret

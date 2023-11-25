@@ -1,0 +1,100 @@
+;
+; chk_stage2(ecx:h_lib) - callback function CRC32: 0xDEADC0DE
+;
+; The returned buf[] must be filled with arbitrary elements in the increasing order,
+; that is buf[i]<=buf[j] if and only if i<=j
+;
+00401ae0 55              push    ebp
+00401ae1 8bec            mov     ebp,esp
+00401ae3 b804200000      mov     eax,2004h
+00401ae8 e8138d0000      call    image00400000+0xa800 (0040a800)
+00401aed a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+00401af2 33c5            xor     eax,ebp
+00401af4 8945fc          mov     dword ptr [ebp-4],eax
+00401af7 56              push    esi
+00401af8 57              push    edi
+00401af9 8bf1            mov     esi,ecx                                        ; h_lib
+00401afb 33ff            xor     edi,edi                                        ; i=0
+00401afd 8d4900          lea     ecx,[ecx]
+; initialize buf[] of type: word buf[0x1000]
+00401b00 e8850d0000      call    image00400000+0x288a (0040288a)
+00401b05 6689847dfcdfffff mov     word ptr [ebp+edi*2-2004h],ax                 ; buf[i] = (word)prf()  (fill buf[] with random data)
+00401b0d 47              inc     edi
+00401b0e 81ff00100000    cmp     edi,1000h
+00401b14 7cea            jl      image00400000+0x1b00 (00401b00)
+00401b16 68dec0adde      push    0DEADC0DEh
+00401b1b e8b0f5ffff      call    image00400000+0x10d0 (004010d0)                ; get_proc_addr_crc(esi:h_lib, 0xDEADC0DE)
+00401b20 83c404          add     esp,4
+00401b23 85c0            test    eax,eax
+00401b25 7512            jne     image00400000+0x1b39 (00401b39)
+finish_fail:
+00401b27 5f              pop     edi
+00401b28 32c0            xor     al,al
+00401b2a 5e              pop     esi
+00401b2b 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401b2e 33cd            xor     ecx,ebp
+00401b30 e8c6090000      call    image00400000+0x24fb (004024fb)
+00401b35 8be5            mov     esp,ebp
+00401b37 5d              pop     ebp
+00401b38 c3              ret
+; export has been found
+00401b39 6800100000      push    1000h                                          ; # of words
+00401b3e 8d8dfcdfffff    lea     ecx,[ebp-2004h]
+00401b44 51              push    ecx
+00401b45 ffd0            call    eax                                            ; h_lib!stage2_callback(buf, 0x1000)
+
+; callback return check 1: buf[i] <= buf[j] if i<=j
+00401b47 33ff            xor     edi,edi                                        ; i=0 (loop index)
+00401b49 8da42400000000  lea     esp,[esp]
+loop_check1:
+00401b50 e8350d0000      call    image00400000+0x288a (0040288a)
+00401b55 25ff0f0080      and     eax,80000FFFh
+00401b5a 7907            jns     image00400000+0x1b63 (00401b63)                ; always jump (prf() returns 0x0000-0x7fff)
+00401b5c 48              dec     eax
+00401b5d 0d00f0ffff      or      eax,0FFFFF000h
+00401b62 40              inc     eax
+00401b63 0fb7f0          movzx   esi,ax                                         ; r1 = prf()&0xfff
+00401b66 e81f0d0000      call    image00400000+0x288a (0040288a)
+00401b6b 25ff0f0080      and     eax,80000FFFh
+00401b70 7907            jns     image00400000+0x1b79 (00401b79)                ; always jumps
+00401b72 48              dec     eax
+00401b73 0d00f0ffff      or      eax,0FFFFF000h
+00401b78 40              inc     eax
+00401b79 0fb7c0          movzx   eax,ax                                         ; r2 = prf()&0xfff
+00401b7c 8bce            mov     ecx,esi
+00401b7e 663bf0          cmp     si,ax
+00401b81 7206            jb      image00400000+0x1b89 (00401b89)
+00401b83 8bc8            mov     ecx,eax
+00401b85 7602            jbe     image00400000+0x1b89 (00401b89)
+00401b87 8bc6            mov     eax,esi
+00401b89 0fb7d0          movzx   edx,ax                                         ; edx = max(r1,r2)
+00401b8c 0fb7c1          movzx   eax,cx                                         ; eax = min(r1,r2)
+00401b8f 668b8c45fcdfffff mov     cx,word ptr [ebp+eax*2-2004h]
+00401b97 663b8c55fcdfffff cmp     cx,word ptr [ebp+edx*2-2004h]
+00401b9f 7786            ja      image00400000+0x1b27 (00401b27)                ; if (buf[min(r1,r2)] > buf[max(r1,r2)]) goto finish_fail
+00401ba1 47              inc     edi
+00401ba2 81ff00010000    cmp     edi,100h
+00401ba8 7ca6            jl      image00400000+0x1b50 (00401b50)                ; if (++i < 0x100) goto loop_check1
+
+; callback return check 2: buf[n] <= buf[n+1]
+; of course if check2 is fulfilled then check1 either
+00401baa b801000000      mov     eax,1                                          ; i=1 (loop index)
+00401baf 90              nop
+loop_check2:
+00401bb0 668b9445fadfffff mov     dx,word ptr [ebp+eax*2-2006h]
+00401bb8 663b9445fcdfffff cmp     dx,word ptr [ebp+eax*2-2004h]
+00401bc0 0f8761ffffff    ja      image00400000+0x1b27 (00401b27)                ; if (buf[i-1]>buf[i]) goto finish_fail
+00401bc6 40              inc     eax
+00401bc7 3d00100000      cmp     eax,1000h
+00401bcc 7ce2            jl      image00400000+0x1bb0 (00401bb0)                ; if (++i < 0x1000) goto loop_check2
+
+; stage 2 passed
+00401bce 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401bd1 5f              pop     edi
+00401bd2 33cd            xor     ecx,ebp
+00401bd4 b001            mov     al,1
+00401bd6 5e              pop     esi
+00401bd7 e81f090000      call    image00400000+0x24fb (004024fb)
+00401bdc 8be5            mov     esp,ebp
+00401bde 5d              pop     ebp
+00401bdf c3              ret

@@ -1,0 +1,214 @@
+;
+; dll_overloader init proc
+;
+1000188c 55              push    ebp
+1000188d 8bec            mov     ebp,esp
+1000188f 837d0c01        cmp     dword ptr [ebp+0Ch],1
+10001893 7505            jne     1000189a
+10001895 e888120000      call    10002b22
+1000189a ff7510          push    dword ptr [ebp+10h]
+1000189d ff750c          push    dword ptr [ebp+0Ch]
+100018a0 ff7508          push    dword ptr [ebp+8]
+100018a3 e807000000      call    100018af
+100018a8 83c40c          add     esp,0Ch
+100018ab 5d              pop     ebp
+100018ac c20c00          ret     0Ch
+
+;
+; vovr(dword magic, byte *ovrmod_img_file) - dll_overloader's only export
+;
+; ovrmod_img_file is an address of loaded module's PE file
+;
+; This is an almost analogous to load_overloader() from the main module.
+; The  only difference is a module occuping the image base of the loaded module
+; is unmapped and its memory is freed. Next the space is used again by the
+; newly loaded module (the overloading process).
+; The func doesn't load imports if a debugger is detected (a check by the PEB
+; inspection)
+;
+10001020 55              push    ebp
+10001021 8bec            mov     ebp,esp
+10001023 ff750c          push    dword ptr [ebp+0Ch]
+10001026 e855030000      call    10001380
+1000102b 83c404          add     esp,4
+1000102e b82a000000      mov     eax,2Ah
+10001033 5d              pop     ebp
+10001034 c20800          ret     8
+
+10001380 55              push    ebp
+10001381 8bec            mov     ebp,esp
+10001383 83ec24          sub     esp,24h
+10001386 8b4508          mov     eax,dword ptr [ebp+8]
+10001389 8945f0          mov     dword ptr [ebp-10h],eax
+1000138c 8b4df0          mov     ecx,dword ptr [ebp-10h]
+1000138f 0fb711          movzx   edx,word ptr [ecx]
+10001392 81fa4d5a0000    cmp     edx,5A4Dh
+10001398 7407            je      100013a1
+1000139a 33c0            xor     eax,eax
+1000139c e9f4010000      jmp     10001595
+100013a1 8b45f0          mov     eax,dword ptr [ebp-10h]
+100013a4 8b4d08          mov     ecx,dword ptr [ebp+8]
+100013a7 03483c          add     ecx,dword ptr [eax+3Ch]
+100013aa 894df4          mov     dword ptr [ebp-0Ch],ecx                        ; ovrmod_img_file->PEHeader
+100013ad 8b55f4          mov     edx,dword ptr [ebp-0Ch]
+100013b0 813a50450000    cmp     dword ptr [edx],4550h
+100013b6 7407            je      100013bf
+100013b8 33c0            xor     eax,eax
+100013ba e9d6010000      jmp     10001595
+100013bf 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+100013c2 8b4834          mov     ecx,dword ptr [eax+34h]                        ; ovrmod_img_file->PEHeader->ImageBase
+100013c5 894df8          mov     dword ptr [ebp-8],ecx
+100013c8 8b55f8          mov     edx,dword ptr [ebp-8]
+100013cb 52              push    edx
+100013cc ff151ca00010    call    dword ptr ds:[1000A01Ch]                       ; kernel32!UnmapViewOfFile(): unmap a module's file occuping the loaded module
+100013d2 6800400000      push    4000h
+100013d7 6800100000      push    1000h
+100013dc 8b45f8          mov     eax,dword ptr [ebp-8]
+100013df 50              push    eax
+100013e0 ff1504a00010    call    dword ptr ds:[1000A004h]                       ; kernel32!VirtualFree(): free overloaded mem space
+100013e6 6a40            push    40h
+100013e8 6800200000      push    2000h
+100013ed 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+100013f0 8b5150          mov     edx,dword ptr [ecx+50h]
+100013f3 52              push    edx
+100013f4 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+100013f7 8b4834          mov     ecx,dword ptr [eax+34h]
+100013fa 51              push    ecx
+100013fb ff1500a00010    call    dword ptr ds:[1000A000h]                       ; kernel32!VirtualAlloc()
+10001401 8945f8          mov     dword ptr [ebp-8],eax
+10001404 837df800        cmp     dword ptr [ebp-8],0
+10001408 7519            jne     10001423
+1000140a 6a40            push    40h
+1000140c 6800200000      push    2000h
+10001411 8b55f4          mov     edx,dword ptr [ebp-0Ch]
+10001414 8b4250          mov     eax,dword ptr [edx+50h]
+10001417 50              push    eax
+10001418 6a00            push    0
+1000141a ff1500a00010    call    dword ptr ds:[1000A000h]                       ; kernel32!VirtualAlloc()
+10001420 8945f8          mov     dword ptr [ebp-8],eax
+10001423 837df800        cmp     dword ptr [ebp-8],0
+10001427 7507            jne     10001430
+10001429 33c0            xor     eax,eax
+1000142b e965010000      jmp     10001595
+10001430 6a14            push    14h
+10001432 6a00            push    0
+10001434 ff1524a00010    call    dword ptr ds:[1000A024h]                       ; kernel32!GetProcessHeap()
+1000143a 50              push    eax
+1000143b ff1520a00010    call    dword ptr ds:[1000A020h]                       ; tdll!RtlAllocateHeap()
+10001441 8945fc          mov     dword ptr [ebp-4],eax
+10001444 8b4dfc          mov     ecx,dword ptr [ebp-4]
+10001447 8b55f8          mov     edx,dword ptr [ebp-8]
+1000144a 895104          mov     dword ptr [ecx+4],edx
+1000144d 8b45fc          mov     eax,dword ptr [ebp-4]
+10001450 c7400c00000000  mov     dword ptr [eax+0Ch],0
+10001457 8b4dfc          mov     ecx,dword ptr [ebp-4]
+1000145a c7410800000000  mov     dword ptr [ecx+8],0
+10001461 8b55fc          mov     edx,dword ptr [ebp-4]
+10001464 c7421000000000  mov     dword ptr [edx+10h],0
+1000146b 6a40            push    40h
+1000146d 6800100000      push    1000h
+10001472 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+10001475 8b4850          mov     ecx,dword ptr [eax+50h]
+10001478 51              push    ecx
+10001479 8b55f8          mov     edx,dword ptr [ebp-8]
+1000147c 52              push    edx
+1000147d ff1500a00010    call    dword ptr ds:[1000A000h]                       ; kernel32!VirtualAlloc()
+10001483 6a40            push    40h
+10001485 6800100000      push    1000h
+1000148a 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+1000148d 8b4854          mov     ecx,dword ptr [eax+54h]
+10001490 51              push    ecx
+10001491 8b55f8          mov     edx,dword ptr [ebp-8]
+10001494 52              push    edx
+10001495 ff1500a00010    call    dword ptr ds:[1000A000h]                       ; kernel32!VirtualAlloc()
+1000149b 8945ec          mov     dword ptr [ebp-14h],eax
+1000149e 8b45f0          mov     eax,dword ptr [ebp-10h]
+100014a1 8b483c          mov     ecx,dword ptr [eax+3Ch]
+100014a4 8b55f4          mov     edx,dword ptr [ebp-0Ch]
+100014a7 034a54          add     ecx,dword ptr [edx+54h]
+100014aa 51              push    ecx
+100014ab 8b45f0          mov     eax,dword ptr [ebp-10h]
+100014ae 50              push    eax
+100014af 8b4dec          mov     ecx,dword ptr [ebp-14h]
+100014b2 51              push    ecx
+100014b3 e8f8450000      call    10005ab0                                       ; memcpy(): copy PE headers
+100014b8 83c40c          add     esp,0Ch
+100014bb 8b55f0          mov     edx,dword ptr [ebp-10h]
+100014be 8b45ec          mov     eax,dword ptr [ebp-14h]
+100014c1 03423c          add     eax,dword ptr [edx+3Ch]
+100014c4 8b4dfc          mov     ecx,dword ptr [ebp-4]
+100014c7 8901            mov     dword ptr [ecx],eax
+100014c9 c745e400000000  mov     dword ptr [ebp-1Ch],0
+100014d0 64a130000000    mov     eax,dword ptr fs:[00000030h]
+100014d6 8b4068          mov     eax,dword ptr [eax+68h]
+100014d9 8945e4          mov     dword ptr [ebp-1Ch],eax                        ; peb->resv4_dt
+100014dc 8b55fc          mov     edx,dword ptr [ebp-4]
+100014df 8b02            mov     eax,dword ptr [edx]
+100014e1 8b4df8          mov     ecx,dword ptr [ebp-8]
+100014e4 894834          mov     dword ptr [eax+34h],ecx
+100014e7 8b55fc          mov     edx,dword ptr [ebp-4]
+100014ea 52              push    edx
+100014eb 8b55f4          mov     edx,dword ptr [ebp-0Ch]
+100014ee 8b4d08          mov     ecx,dword ptr [ebp+8]
+100014f1 e84afbffff      call    10001040                                       ; copy_sects()
+100014f6 83c404          add     esp,4
+100014f9 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+100014fc 8b4df8          mov     ecx,dword ptr [ebp-8]
+100014ff 2b4834          sub     ecx,dword ptr [eax+34h]
+10001502 894de8          mov     dword ptr [ebp-18h],ecx
+10001505 740b            je      10001512
+10001507 8b55e8          mov     edx,dword ptr [ebp-18h]
+1000150a 8b4dfc          mov     ecx,dword ptr [ebp-4]
+1000150d e8aefcffff      call    100011c0                                       ; reloc()
+10001512 8b55e4          mov     edx,dword ptr [ebp-1Ch]
+10001515 83e270          and     edx,70h
+10001518 7510            jne     1000152a                                       ; if (peb->resv4_dt & 0x70) dbg detected!
+1000151a 8b4dfc          mov     ecx,dword ptr [ebp-4]
+1000151d e83efdffff      call    10001260                                       ; load_imports()
+10001522 85c0            test    eax,eax
+10001524 7504            jne     1000152a
+10001526 eb63            jmp     1000158b                                       ; goto finish_err
+10001528 eb61            jmp     1000158b
+
+1000152a 8b4dfc          mov     ecx,dword ptr [ebp-4]
+1000152d e8befbffff      call    100010f0
+10001532 8b45fc          mov     eax,dword ptr [ebp-4]
+10001535 8b08            mov     ecx,dword ptr [eax]
+10001537 83792800        cmp     dword ptr [ecx+28h],0
+1000153b 7449            je      10001586                                       ; is ldmon_desc->pe_hdr->AddressOfEntryPoint provided?
+; EP provided
+1000153d 8b55fc          mov     edx,dword ptr [ebp-4]
+10001540 8b02            mov     eax,dword ptr [edx]
+10001542 8b4df8          mov     ecx,dword ptr [ebp-8]
+10001545 034828          add     ecx,dword ptr [eax+28h]
+10001548 894de0          mov     dword ptr [ebp-20h],ecx
+1000154b 7504            jne     10001551
+1000154d eb3c            jmp     1000158b
+1000154f eb3a            jmp     1000158b
+
+; free itself and return to the EP (pushed on the stack) after kernel32!VirtualFree() call
+10001551 81c4e8000000    add     esp,0E8h
+10001557 6800400000      push    4000h                                          ; MEM_DECOMMIT
+1000155c 6800100000      push    1000h                                          ; size
+10001561 ff35808d0010    push    dword ptr ds:[10008D80h]                       ; dll_overloader's base addr
+10001567 ff75e0          push    dword ptr [ebp-20h]                            ; EP
+1000156a 8d0504a00010    lea     eax,ds:[1000A004h]
+10001570 ff20            jmp     dword ptr [eax]                                ; kernel32!VirtualFree()
+
+10001572 837ddc00        cmp     dword ptr [ebp-24h],0
+10001576 7504            jne     1000157c
+10001578 eb11            jmp     1000158b
+1000157a eb0f            jmp     1000158b
+1000157c 8b55fc          mov     edx,dword ptr [ebp-4]
+1000157f c7421001000000  mov     dword ptr [edx+10h],1
+; no EP
+10001586 8b45fc          mov     eax,dword ptr [ebp-4]
+10001589 eb0a            jmp     10001595
+
+finish_err:
+1000158b 8b4dfc          mov     ecx,dword ptr [ebp-4]
+1000158e e80d000000      call    100015a0
+10001593 33c0            xor     eax,eax
+10001595 8be5            mov     esp,ebp
+10001597 5d              pop     ebp
+10001598 c3              ret

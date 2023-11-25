@@ -1,0 +1,357 @@
+; CrackMe app
+
+00401af0 55              push    ebp
+00401af1 8bec            mov     ebp,esp
+00401af3 6aff            push    0FFFFFFFFh
+00401af5 684cf38000      push    offset image00400000+0x40f34c (0080f34c)
+00401afa 64a100000000    mov     eax,dword ptr fs:[00000000h]
+00401b00 50              push    eax
+00401b01 81ec100d0000    sub     esp,0D10h
+00401b07 a17c909e00      mov     eax,dword ptr [image00400000+0x5e907c (009e907c)]
+00401b0c 33c5            xor     eax,ebp
+00401b0e 8945f0          mov     dword ptr [ebp-10h],eax
+00401b11 53              push    ebx
+00401b12 56              push    esi
+00401b13 57              push    edi
+00401b14 50              push    eax
+00401b15 8d45f4          lea     eax,[ebp-0Ch]
+00401b18 64a300000000    mov     dword ptr fs:[00000000h],eax
+00401b1e 8bf1            mov     esi,ecx
+00401b20 33ff            xor     edi,edi
+00401b22 89b5e4f2ffff    mov     dword ptr [ebp-0D1Ch],esi
+00401b28 39bee8000000    cmp     dword ptr [esi+0E8h],edi
+00401b2e 0f84c0010000    je      image00400000+0x1cf4 (00401cf4)
+00401b34 bbb8209e00      mov     ebx,offset image00400000+0x5e20b8 (009e20b8)
+00401b39 899df4f2ffff    mov     dword ptr [ebp-0D0Ch],ebx
+00401b3f 8bc3            mov     eax,ebx
+00401b41 b901000000      mov     ecx,1
+00401b46 f00fc108        lock xadd dword ptr [eax],ecx
+00401b4a 8b8e84000000    mov     ecx,dword ptr [esi+84h]
+00401b50 8d95fcf2ffff    lea     edx,[ebp-0D04h]
+00401b56 52              push    edx
+00401b57 897dfc          mov     dword ptr [ebp-4],edi
+00401b5a e8010d0d00      call    image00400000+0xd2860 (004d2860)
+00401b5f 50              push    eax
+00401b60 8d8df4f2ffff    lea     ecx,[ebp-0D0Ch]
+00401b66 c645fc01        mov     byte ptr [ebp-4],1
+00401b6a e8e13c0000      call    image00400000+0x5850 (00405850)
+00401b6f 8b85fcf2ffff    mov     eax,dword ptr [ebp-0D04h]
+00401b75 c645fc00        mov     byte ptr [ebp-4],0
+00401b79 83c9ff          or      ecx,0FFFFFFFFh
+00401b7c f00fc108        lock xadd dword ptr [eax],ecx
+00401b80 750f            jne     image00400000+0x1b91 (00401b91)
+00401b82 8b95fcf2ffff    mov     edx,dword ptr [ebp-0D04h]
+00401b88 52              push    edx
+00401b89 e8b23c0000      call    image00400000+0x5840 (00405840)
+00401b8e 83c404          add     esp,4
+00401b91 8d8500ffffff    lea     eax,[ebp-100h]
+00401b97 50              push    eax
+00401b98 8d8df4f2ffff    lea     ecx,[ebp-0D0Ch]
+00401b9e 89bdecf2ffff    mov     dword ptr [ebp-0D14h],edi                      ; name_len=0
+00401ba4 e877780000      call    image00400000+0x9420 (00409420)                ; copy provided name to name_w[] -> BUG: doesn't copy terminating NULL
+
+00401ba9 6aff            push    0FFFFFFFFh                                     ; arg: 0xffffffff
+00401bab 8d8d00ffffff    lea     ecx,[ebp-100h]
+00401bb1 51              push    ecx                                            ; arg: name_w[] (in unicode)
+00401bb2 6a50            push    50h                                            ; arg: 0x50: sizeof(name)
+00401bb4 8d55a0          lea     edx,[ebp-60h]                                  ; arg: [out] name, of type name[0x50]
+00401bb7 52              push    edx
+00401bb8 8d85ecf2ffff    lea     eax,[ebp-0D14h]                                ; arg: [out] &name_len
+00401bbe 50              push    eax
+00401bbf e8271a3d00      call    image00400000+0x3d35eb (007d35eb)              ; unicode2ascii(): expects unicode with NULL term char!
+00401bc4 83c414          add     esp,14h
+
+00401bc7 899df8f2ffff    mov     dword ptr [ebp-0D08h],ebx
+00401bcd b901000000      mov     ecx,1
+00401bd2 f00fc10b        lock xadd dword ptr [ebx],ecx
+00401bd6 8b4e7c          mov     ecx,dword ptr [esi+7Ch]
+00401bd9 8d95fcf2ffff    lea     edx,[ebp-0D04h]
+00401bdf b302            mov     bl,2
+00401be1 52              push    edx
+00401be2 885dfc          mov     byte ptr [ebp-4],bl
+00401be5 e896f4ffff      call    image00400000+0x1080 (00401080)
+00401bea 50              push    eax
+00401beb 8d8df8f2ffff    lea     ecx,[ebp-0D08h]
+00401bf1 c645fc03        mov     byte ptr [ebp-4],3
+00401bf5 e8563c0000      call    image00400000+0x5850 (00405850)
+00401bfa 8b85fcf2ffff    mov     eax,dword ptr [ebp-0D04h]
+00401c00 885dfc          mov     byte ptr [ebp-4],bl
+00401c03 83c9ff          or      ecx,0FFFFFFFFh
+00401c06 f00fc108        lock xadd dword ptr [eax],ecx
+00401c0a 750f            jne     image00400000+0x1c1b (00401c1b)
+00401c0c 8b95fcf2ffff    mov     edx,dword ptr [ebp-0D04h]
+00401c12 52              push    edx
+00401c13 e8283c0000      call    image00400000+0x5840 (00405840)
+00401c18 83c404          add     esp,4
+00401c1b 8d8500f3ffff    lea     eax,[ebp-0D00h]
+00401c21 50              push    eax
+00401c22 8d8df8f2ffff    lea     ecx,[ebp-0D08h]
+00401c28 89bde8f2ffff    mov     dword ptr [ebp-0D18h],edi                      ; key_len=0
+00401c2e e8ed770000      call    image00400000+0x9420 (00409420)                ; copy provided key to keyb64_w[] -> BUG: doesn't copy terminating NULL
+00401c33 6aff            push    0FFFFFFFFh
+00401c35 8d8d00f3ffff    lea     ecx,[ebp-0D00h]
+00401c3b 51              push    ecx                                            ; arg: keyb64_w[] (in unicode)
+00401c3c 6800040000      push    400h                                           ; arg: 0x400
+00401c41 8d9500fbffff    lea     edx,[ebp-500h]                                 ; arg: [out] keyb64, of type keyb64[0x400]
+00401c47 52              push    edx
+00401c48 8d85e8f2ffff    lea     eax,[ebp-0D18h]                                ; arg: [out] &keyb64_len
+00401c4e 50              push    eax
+00401c4f e897193d00      call    image00400000+0x3d35eb (007d35eb)              ; unicode2ascii(): expects unicode with NULL term char!
+
+00401c54 8d8500fbffff    lea     eax,[ebp-500h]
+00401c5a 83c414          add     esp,14h
+00401c5d 8d5001          lea     edx,[eax+1]
+00401c60 8a08            mov     cl,byte ptr [eax]
+00401c62 40              inc     eax
+00401c63 84c9            test    cl,cl
+00401c65 75f9            jne     image00400000+0x1c60 (00401c60)
+00401c67 2bc2            sub     eax,edx
+00401c69 8bf8            mov     edi,eax
+00401c6b 8d347f          lea     esi,[edi+edi*2]
+00401c6e 03f6            add     esi,esi
+00401c70 c1ee03          shr     esi,3
+00401c73 56              push    esi
+00401c74 e83e153d00      call    image00400000+0x3d31b7 (007d31b7)              ; key_len = malloc(keyb64_len*6/8)
+00401c79 83c404          add     esp,4
+00401c7c 8bd8            mov     ebx,eax
+00401c7e 53              push    ebx                                            ; arg: [out] key[]
+00401c7f 57              push    edi                                            ; arg: key_len
+00401c80 8d8d00fbffff    lea     ecx,[ebp-500h]
+00401c86 51              push    ecx                                            ; arg: keyb64[]
+00401c87 8d8df3f2ffff    lea     ecx,[ebp-0D0Dh]
+00401c8d e82efaffff      call    image00400000+0x16c0 (004016c0)                ; base64_decode()
+00401c92 8b95ecf2ffff    mov     edx,dword ptr [ebp-0D14h]
+00401c98 8b8de4f2ffff    mov     ecx,dword ptr [ebp-0D1Ch]
+00401c9e 56              push    esi                                            ; arg: key_len
+00401c9f 53              push    ebx                                            ; arg: key[]
+00401ca0 52              push    edx                                            ; arg: name_len
+00401ca1 8b91e8000000    mov     edx,dword ptr [ecx+0E8h]
+00401ca7 8d45a0          lea     eax,[ebp-60h]
+00401caa 50              push    eax                                            ; arg: name[]
+00401cab ffd2            call    edx                                            ; phd_crackme_by_eset_enjoy_0B3D2D6F!Verify()
+
+--------------------------------------------------------------------------------
+; CrackMe dll
+
+Verify(char *name, int name_len, char *key, int key_len);
+
+Local vars layout on the stack (esp relative):
+   0x10.. 0x49  work_buf_40[0x40]
+   0x50.. 0x5b  tail[0x0c]; must start with " SSE" {0x20,0x53,0x53,0x45} but looks like hasn't been initialized anywhere: BUG
+   0x5c.. 0x5f  term_call (4)
+   0x64.. 0x6f  hash[0x0c]; set to: {0xca,0x8a,0x57,0x12,0x78,0xb6,0xca,0xef,0x78,0x56,0x34,0x12}
+   0x70.. 0xbf  work_buf_50[0x50]
+   0xc0.. 0xff  name_hashed[0x40]
+  0x104..0x107  xored esp (4)
+
+Algorithm:
+  call_exit_proc = verification_failed;
+  IF (key_len<=0x40) { call_exit(); RETURN; }
+
+  memcpy(work_buf_50, init_dta);        // arrays of 0x50 bytes
+  memcpy(work_buf_50, name, min(0x50, name_len));
+  name_hashed = whirlpool(work_buf_50, sizeof(work_buf_50));    // result is an array of 0x40 bytes
+
+  // rev_memcmp() compares arrays in reverse order: name_hashed[0]<->key[0x3f], name_hashed[1]<->key[0x3e], ...
+  IF (rev_memcmp(name_hashed, key, 0x40)!=0) { call_exit(); RETURN; }
+
+  // xor_loop: simply xors key with its tail; if key_len==2*0x40 -> work_buf_40[]==key[]
+  memcpy(work_buf_40, name_hashed);
+  FOR (i=0;i<key_len; i++) {
+    work_buf_40[i%0x40]^=key[i%0x40]
+  }
+
+  // perm_loop: permutates work_buf_40[] table
+  FOR (i=0;i<0x40; i+=4) {
+    xchng(work_buf_40[work_buf_40[i]  &0x0f], work_buf_40[i]);
+    xchng(work_buf_40[work_buf_40[i+1]&0x0f], work_buf_40[i+1]);
+    xchng(work_buf_40[work_buf_40[i+2]&0x0f], work_buf_40[i+2]);
+    xchng(work_buf_40[work_buf_40[i+3]&0x0f], work_buf_40[i+3]);
+  }
+
+  // BUG: tail[] is set nowhere in the code; so this check will alwas fail
+  //
+  // NOTE: With high probability, the intention of authors was, the perm_loop
+  // overflows against its boundary modifying tail[] and term_call vars.
+  // It is justified by this check and call_exit_proc re-initialization.
+  IF (memcmp(tail, {0x20,0x53,0x53,0x45}, 4)) {
+    call_exit_proc = verification_failed;
+    call_exit();
+    RETURN;
+  }
+
+  // calculate hash over work_buf_40[] + tail[]
+  //
+  // NOTE: Since it's almost impossible to find a hash with a given 12 bytes at
+  // the beggining (in feasible time, BitCoin chains as an example), the author's
+  // intention was probably to set term_call to verification_success by
+  // perm_loop overflow. It is justified by not calling call_exit_proc
+  // re-initialization.at this point, event though it was called previously.
+  IF (memcmp(
+    whirlpool(work_buf_40, 0x4c),
+    {0xca,0x8a,0x57,0x12,0x78,0xb6,0xca,0xef,0x78,0x56,0x34,0x12},
+    0x0c)!=0) { call_exit(); RETURN; }
+
+  call_exit_proc = verification_success;
+  call_exit();
+  RETURN;
+
+
+phd_crackme_by_eset_enjoy_0B3D2D6F!Verify:
+10001040 55              push    ebp
+10001041 8bec            mov     ebp,esp
+10001043 83e4f8          and     esp,0FFFFFFF8h
+10001046 81ecfc000000    sub     esp,0FCh
+1000104c a100400010      mov     eax,dword ptr [phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x2fc0 (10004000)]
+10001051 33c4            xor     eax,esp
+10001053 898424f8000000  mov     dword ptr [esp+0F8h],eax
+1000105a 837d1440        cmp     dword ptr [ebp+14h],40h
+1000105e 8b5508          mov     edx,dword ptr [ebp+8]
+10001061 53              push    ebx
+10001062 56              push    esi
+10001063 57              push    edi
+10001064 c744245c20100010 mov     dword ptr [esp+5Ch],offset phd_crackme_by_eset_enjoy_0B3D2D6F+0x1020 (10001020)   ; set "failed call"
+1000106c 0f8e85010000    jle     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x1b7 (100011f7)     ; if (key_len <= 0x40) goto call_exit_noset
+10001072 8b450c          mov     eax,dword ptr [ebp+0Ch]
+10001075 b914000000      mov     ecx,14h
+1000107a be80310010      mov     esi,offset phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x2140 (10003180) ; byte init_dta[0x50] = "ESETNOD32@ESETNOD32@ESETNOD32@ESETNOD32@ESETNOD32@ESETNOD32@ESETNOD32@ESETNOD32@"
+1000107f 8d7c2470        lea     edi,[esp+70h]                                                  ; work_buf_50, of type byte work_buf_50[0x50]
+10001083 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]                            ; memcpy(work_buf_50[], init_dta, 0x50)
+10001085 83f850          cmp     eax,50h
+10001088 7205            jb      phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x4f (1000108f)
+1000108a b850000000      mov     eax,50h
+1000108f 50              push    eax
+10001090 52              push    edx
+10001091 8d442478        lea     eax,[esp+78h]
+10001095 50              push    eax
+10001096 e869120000      call    phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x12c4 (10002304)    ; memcpy(work_buf_50, name, MIN(name_len, 0x50))
+1000109b 83c40c          add     esp,0Ch
+1000109e 8d8c24c0000000  lea     ecx,[esp+0C0h]                                                 ; arg: [out] name_hashed[], of type byte name_hashed[0x40]
+100010a5 51              push    ecx
+100010a6 8d542474        lea     edx,[esp+74h]
+100010aa 52              push    edx                                                            ; arg: work_buf_50
+100010ab b950000000      mov     ecx,50h                                                        ; arg: ecx:0x50 (length)
+100010b0 e89b080000      call    phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x910 (10001950)     ; whirlpool()
+100010b5 8b5d10          mov     ebx,dword ptr [ebp+10h]                                        ; key[]
+100010b8 83c408          add     esp,8
+
+; reverse order copy 0x40 bytes from key[] to work_buf_50[]
+100010bb b83f000000      mov     eax,3Fh
+100010c0 8d4c2470        lea     ecx,[esp+70h]                                                  ; work_buf_50[]
+100010c4 8a1418          mov     dl,byte ptr [eax+ebx]
+100010c7 8811            mov     byte ptr [ecx],dl
+100010c9 41              inc     ecx
+100010ca 48              dec     eax
+100010cb 79f7            jns     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x84 (100010c4)
+
+; if memcmp(work_buf_50, name_hashed, 0x40) not equal -> goto call_exit_noset
+100010cd b840000000      mov     eax,40h
+100010d2 33c9            xor     ecx,ecx
+100010d4 8b940cc0000000  mov     edx,dword ptr [esp+ecx+0C0h]
+100010db 3b540c70        cmp     edx,dword ptr [esp+ecx+70h]
+100010df 0f8512010000    jne     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x1b7 (100011f7)
+100010e5 83e804          sub     eax,4
+100010e8 83c104          add     ecx,4
+100010eb 83f804          cmp     eax,4
+100010ee 73e4            jae     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x94 (100010d4)
+
+100010f0 b910000000      mov     ecx,10h
+100010f5 8db424c0000000  lea     esi,[esp+0C0h]
+100010fc 8d7c2410        lea     edi,[esp+10h]                                                  ; work_buf_40[]
+10001100 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]                            ; memcpy(work_buf_40, name_hashed, 0x40)
+10001102 33c9            xor     ecx,ecx
+10001104 394d14          cmp     dword ptr [ebp+14h],ecx
+10001107 7e1b            jle     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0xe4 (10001124)
+10001109 8da42400000000  lea     esp,[esp]
+
+; xor key[] with its tail
+xor_loop:                                                                                       ; ecx as an index loop (i=0)
+10001110 8bc1            mov     eax,ecx
+10001112 83e03f          and     eax,3Fh
+10001115 8d540410        lea     edx,[esp+eax+10h]
+10001119 8a0418          mov     al,byte ptr [eax+ebx]
+1000111c 3002            xor     byte ptr [edx],al                                              ; work_buf_40[i%0x40] ^= key[i%0x40]
+1000111e 41              inc     ecx
+1000111f 3b4d14          cmp     ecx,dword ptr [ebp+14h]
+10001122 7cec            jl      phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0xd0 (10001110)      ; if (++i<key_len) goto xor_loop
+
+10001124 33c0            xor     eax,eax                                        ; i=0
+
+perm_loop:
+10001126 8a4c0410        mov     cl,byte ptr [esp+eax+10h]
+1000112a 0fbef1          movsx   esi,cl
+1000112d 83e60f          and     esi,0Fh
+10001130 8a543410        mov     dl,byte ptr [esp+esi+10h]                      ; tmp = work_buf_40[work_buf_40[i]&0x0f]
+10001134 884c3410        mov     byte ptr [esp+esi+10h],cl                      ; work_buf_40[work_buf_40[i]&0x0f] = work_buf_40[i]
+10001138 8a4c0411        mov     cl,byte ptr [esp+eax+11h]
+1000113c 8d743410        lea     esi,[esp+esi+10h]
+10001140 0fbef1          movsx   esi,cl
+10001143 83e60f          and     esi,0Fh
+10001146 8d743410        lea     esi,[esp+esi+10h]
+1000114a 88540410        mov     byte ptr [esp+eax+10h],dl                      ; work_buf_40[i] = tmp
+1000114e 8a16            mov     dl,byte ptr [esi]                              ; tmp = work_buf_40[work_buf_40[i+1]&0x0f]
+10001150 880e            mov     byte ptr [esi],cl                              ; work_buf_40[work_buf_40[i+1]&0x0f] = work_buf_40[i+1]
+10001152 8a4c0412        mov     cl,byte ptr [esp+eax+12h]
+10001156 0fbef1          movsx   esi,cl
+10001159 83e60f          and     esi,0Fh
+1000115c 8d743410        lea     esi,[esp+esi+10h]
+10001160 88540411        mov     byte ptr [esp+eax+11h],dl                      ; work_buf_40[i+1] = tmp
+10001164 8a16            mov     dl,byte ptr [esi]                              ; tmp = work_buf_40[work_buf_40[i+2]&0x0f]
+10001166 880e            mov     byte ptr [esi],cl                              ; work_buf_40[work_buf_40[i+2]&0x0f] = work_buf_40[i+2]
+10001168 8a4c0413        mov     cl,byte ptr [esp+eax+13h]
+1000116c 0fbef1          movsx   esi,cl
+1000116f 83e60f          and     esi,0Fh
+10001172 88540412        mov     byte ptr [esp+eax+12h],dl                      ; work_buf_40[i+2] = tmp
+10001176 8a543410        mov     dl,byte ptr [esp+esi+10h]                      ; tmp = work_buf_40[work_buf_40[i+3]&0x0f]
+1000117a 8d743410        lea     esi,[esp+esi+10h]
+1000117e 880e            mov     byte ptr [esi],cl                              ; work_buf_40[work_buf_40[i+3]&0x0f] = work_buf_40[i+3]
+10001180 88540413        mov     byte ptr [esp+eax+13h],dl                      ; work_buf_40[i+3] = tmp
+10001184 83c004          add     eax,4                                          ; i+=4
+10001187 83f840          cmp     eax,40h
+1000118a 7c9a            jl      phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0xe6 (10001126)  ; if (i<0x40) goto perm_loop
+
+; calculate hash on the permutated/xor'ed key[] + tail[] and write it to work_buf_50[]
+1000118c 817c245020535345 cmp     dword ptr [esp+50h],45535320h                                 ; " SSE" {20 53 53 45}
+10001194 7559            jne     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x1af (100011ef)     ; goto call_exit_set_failed
+10001196 8d4c2470        lea     ecx,[esp+70h]
+1000119a 51              push    ecx                                                            ; arg: [out] work_buf_50[]
+1000119b 8d542414        lea     edx,[esp+14h]
+1000119f 52              push    edx                                                            ; arg: work_buf_40[]
+100011a0 b94c000000      mov     ecx,4Ch                                                        ; arg: ecx:0x4c (length: sizeof(work_buf_40)+sizeof(tail))
+100011a5 c744246cca8a5712 mov     dword ptr [esp+6Ch],12578ACAh
+100011ad c744247078b6caef mov     dword ptr [esp+70h],0EFCAB678h
+100011b5 c744247478563412 mov     dword ptr [esp+74h],12345678h                                 ; set hash[] value
+100011bd e88e070000      call    phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x910 (10001950)     ; whirlpool()
+100011c2 83c408          add     esp,8
+
+100011c5 b80c000000      mov     eax,0Ch
+100011ca 33c9            xor     ecx,ecx
+100011cc 8d642400        lea     esp,[esp]
+
+; if memcmp(work_buf_50, hash, 0x0c) not equal -> goto call_exit_noset
+100011d0 8b540c70        mov     edx,dword ptr [esp+ecx+70h]
+100011d4 3b540c64        cmp     edx,dword ptr [esp+ecx+64h]
+100011d8 751d            jne     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x1b7 (100011f7)     ; goto call_exit_noset
+100011da 83e804          sub     eax,4
+100011dd 83c104          add     ecx,4
+100011e0 83f804          cmp     eax,4
+100011e3 73eb            jae     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x190 (100011d0)
+
+; success
+100011e5 c744245c00100010 mov     dword ptr [esp+5Ch],offset phd_crackme_by_eset_enjoy_0B3D2D6F+0x1000 (10001000)
+100011ed eb08            jmp     phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0x1b7 (100011f7)     ; goto call_exit_noset
+
+call_exit_set_failed:
+100011ef c744245c20100010 mov     dword ptr [esp+5Ch],offset phd_crackme_by_eset_enjoy_0B3D2D6F+0x1020 (10001020)
+call_exit_noset:
+100011f7 ff54245c        call    dword ptr [esp+5Ch]
+100011fb 8b8c2404010000  mov     ecx,dword ptr [esp+104h]
+10001202 5f              pop     edi
+10001203 5e              pop     esi
+10001204 5b              pop     ebx
+10001205 33cc            xor     ecx,esp
+10001207 33c0            xor     eax,eax
+10001209 e880080000      call    phd_crackme_by_eset_enjoy_0B3D2D6F!Verify+0xa4e (10001a8e)
+1000120e 8be5            mov     esp,ebp
+10001210 5d              pop     ebp
+10001211 c21000          ret     10h

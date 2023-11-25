@@ -1,0 +1,26 @@
+$$ goto de-upx'ed addr space (ba e1 doesn't work yet)
+bp GetCommandLineW; bp GetCommandLineA; g; bc *
+
+$$ hide a debbuger (the final module loading)
+f dwo(fs:0x30)+0x68 L4 0
+
+$$ omit dll_overloader anti-debug
+g 0x00410d05
+
+bp ntdll!NtQueryInformationProcess ".if (dwo(@esp+8)==7) {} .else {gc}"
+bp 0x00410d0a
+
+.while (1) {
+  g
+  .if (@eip==ntdll!NtQueryInformationProcess) {
+    pt; f dwo(@esp+0xc) L4 0
+  } .else { .break }
+}
+bc *
+
+$$ dump the final module
+g 0x004108a1
+$$ .writemem final.exe @eax Ldwo(@ebp-10)
+
+$$ goto the main() of the final module
+ba e1 0x00401190; g; bc *

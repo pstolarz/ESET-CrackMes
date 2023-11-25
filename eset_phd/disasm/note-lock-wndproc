@@ -1,0 +1,682 @@
+; WM_KEYUP
+bp 0051DD60 ".if (dwo(@esp+8)==101) {} .else {gc}"
+
+; WM_LBUTTONUP
+bp 0051DD60 ".if (dwo(@esp+8)==0202) {} .else {gc}"
+bp 0051de12 ".if (@ebp==0202) {} .else {gc}"
+bp 0051b425 ".if (dwo(@edi+4)==202 & ecx==202) {} .else {gc}"
+bp 0051bd77 ".if (@ebx==3) {g 0040ee8b} .else {gc}"; g 0040ee8b
+bp 004eac4c
+bp 004c99a0
+
+; ------------------------------------------------------------------------------
+  All code below is a trace from the QT win-proc tracking the WM_LBUTTONUP
+  message handling up to the lock buttons action handlers.
+; ------------------------------------------------------------------------------
+
+called from win proc (msg:WM_LBUTTONUP)
+
+0051b409 b900020000      mov     ecx,200h
+0051b40e 33c0            xor     eax,eax                                        ; i=0
+0051b410 394f04          cmp     dword ptr [edi+4],ecx
+0051b413 7415            je      image00400000+0x11b42a (0051b42a)
+; look for a handler descriptor
+0051b415 663bcb          cmp     cx,bx
+0051b418 7410            je      image00400000+0x11b42a (0051b42a)
+0051b41a 0fb70c455ed18e00 movzx   ecx,word ptr image00400000+0x4ed15e (008ed15e)[eax*2]
+0051b422 83c003          add     eax,3                                          ; i+=3
+0051b425 3b4f04          cmp     ecx,dword ptr [edi+4]
+0051b428 75eb            jne     image00400000+0x11b415 (0051b415)
+; end of searching
+0051b42a 66391c4558d18e00 cmp     word ptr image00400000+0x4ed158 (008ed158)[eax*2],bx
+0051b432 7507            jne     image00400000+0x11b43b (0051b43b)
+0051b434 32c0            xor     al,al
+0051b436 e9300a0000      jmp     image00400000+0x11be6b (0051be6b)
+; hanlder found
+0051b43b 0fb71c455ad18e00 movzx   ebx,word ptr image00400000+0x4ed15a (008ed15a)[eax*2]
+0051b443 0fb704455cd18e00 movzx   eax,word ptr image00400000+0x4ed15c (008ed15c)[eax*2]
+0051b44b 895c2424        mov     dword ptr [esp+24h],ebx                        ; B==3 (for ecx==0x202)
+0051b44f 8944242c        mov     dword ptr [esp+2Ch],eax                        ; A==1
+...
+0051bcbc 83fb03          cmp     ebx,3
+0051bcbf 7512            jne     image00400000+0x11bcd3 (0051bcd3)
+0051bcc1 85f6            test    esi,esi
+0051bcc3 750e            jne     image00400000+0x11bcd3 (0051bcd3)
+0051bcc5 e8661ffbff      call    image00400000+0xcdc30 (004cdc30)
+0051bcca 85c0            test    eax,eax
+0051bccc 7505            jne     image00400000+0x11bcd3 (0051bcd3)
+0051bcce e83dbfffff      call    image00400000+0x117c10 (00517c10)              ; USER32!ReleaseCapture
+0051bcd3 8b0d9c3c9e00    mov     ecx,dword ptr [image00400000+0x5e3c9c (009e3c9c)]
+0051bcd9 8b442438        mov     eax,dword ptr [esp+38h]
+0051bcdd 8b15a03c9e00    mov     edx,dword ptr [image00400000+0x5e3ca0 (009e3ca0)]
+0051bce3 50              push    eax
+0051bce4 894c2434        mov     dword ptr [esp+34h],ecx
+0051bce8 8b0decc09e00    mov     ecx,dword ptr [image00400000+0x5ec0ec (009ec0ec)]
+0051bcee 51              push    ecx
+0051bcef 51              push    ecx
+0051bcf0 8bc4            mov     eax,esp
+0051bcf2 89642430        mov     dword ptr [esp+30h],esp
+0051bcf6 53              push    ebx
+0051bcf7 89542444        mov     dword ptr [esp+44h],edx
+0051bcfb 6848c19e00      push    offset image00400000+0x5ec148 (009ec148)
+0051bd00 8d542444        lea     edx,[esp+44h]
+0051bd04 52              push    edx
+0051bd05 55              push    ebp
+0051bd06 8930            mov     dword ptr [eax],esi
+0051bd08 e893dbfcff      call    image00400000+0xe98a0 (004e98a0)               ; returns pressed control's handle (ctrl_hndl)
+0051bd0d 8bf8            mov     edi,eax
+0051bd0f 83c41c          add     esp,1Ch
+0051bd12 85ff            test    edi,edi
+0051bd14 0f841af7ffff    je      image00400000+0x11b434 (0051b434)              ; error
+0051bd1a 8b44243c        mov     eax,dword ptr [esp+3Ch]
+0051bd1e 51              push    ecx
+0051bd1f 8bcc            mov     ecx,esp
+0051bd21 89642428        mov     dword ptr [esp+28h],esp
+0051bd25 51              push    ecx
+0051bd26 25000000fe      and     eax,0FE000000h
+0051bd2b 8901            mov     dword ptr [ecx],eax
+0051bd2d 8bc4            mov     eax,esp
+0051bd2f 8964242c        mov     dword ptr [esp+2Ch],esp
+0051bd33 8930            mov     dword ptr [eax],esi
+0051bd35 8b442434        mov     eax,dword ptr [esp+34h]
+0051bd39 50              push    eax
+0051bd3a 8d4c243c        lea     ecx,[esp+3Ch]
+0051bd3e 51              push    ecx
+0051bd3f 6848c19e00      push    offset image00400000+0x5ec148 (009ec148)
+0051bd44 53              push    ebx
+0051bd45 8d8c24d8000000  lea     ecx,[esp+0D8h]
+0051bd4c e8df7d0000      call    image00400000+0x123b30 (00523b30)
+0051bd51 8b542438        mov     edx,dword ptr [esp+38h]
+0051bd55 6a01            push    1
+0051bd57 6824c19e00      push    offset image00400000+0x5ec124 (009ec124)
+0051bd5c 68ecc09e00      push    offset image00400000+0x5ec0ec (009ec0ec)
+0051bd61 55              push    ebp
+0051bd62 52              push    edx
+0051bd63 8d8424d4000000  lea     eax,[esp+0D4h]
+0051bd6a 50              push    eax                                            ; arg2: ???
+0051bd6b 57              push    edi                                            ; arg1: ctrl_hndl
+0051bd6c c784240c01000004000000 mov dword ptr [esp+10Ch],4
+0051bd77 e804e9fcff      call    image00400000+0xea680 (004ea680)
+0051bd7c 83c41c          add     esp,1Ch
+0051bd7f 84c0            test    al,al
+--------
+004ea680 6aff            push    0FFFFFFFFh
+...
+004ea858 55              push    ebp                                            ; arg2
+004ea859 52              push    edx                                            ; arg1: ctrl_hndl
+004ea85a e8a145f2ff      call    image00400000+0xee00 (0040ee00)
+004ea85f 8ad8            mov     bl,al
+004ea861 eb02            jmp     image00400000+0xea865 (004ea865)
+004ea863 32db            xor     bl,bl
+--------
+0040ee00 55              push    ebp
+...
+0040ee7d 51              push    ecx                                            ; arg2
+0040ee7e 57              push    edi                                            ; arg1: ctrl_hndl
+0040ee7f 8bce            mov     ecx,esi
+0040ee81 895d08          mov     dword ptr [ebp+8],ebx
+0040ee84 c745fc00000000  mov     dword ptr [ebp-4],0
+0040ee8b ffd2            call    edx                                            ; call 004eab80 (WM_LBUTTONUP hanlder)
+0040ee8d ff4b0c          dec     dword ptr [ebx+0Ch]
+...
+0040ee9e 8be5            mov     esp,ebp
+0040eea0 5d              pop     ebp
+0040eea1 c20800          ret     8
+--------
+004eab80 55              push    ebp
+...
+004eabc6 8b5d08          mov     ebx,dword ptr [ebp+8]
+004eabc9 85db            test    ebx,ebx                                        ; ctrl_hndl
+004eabcb 7527            jne     image00400000+0xeabf4 (004eabf4)
+...
+004eabf4 8b750c          mov     esi,dword ptr [ebp+0Ch]
+...
+004eac00 0fb74608        movzx   eax,word ptr [esi+8]
+...
+004eac13 83f803          cmp     eax,3
+004eac16 7419            je      image00400000+0xeac31 (004eac31)
+...
+004eac31 8b560c          mov     edx,dword ptr [esi+0Ch]
+004eac34 891578ab9e00    mov     dword ptr [image00400000+0x5eab78 (009eab78)],edx
+004eac3a 66837e0802      cmp     word ptr [esi+8],2
+004eac3f 8b4620          mov     eax,dword ptr [esi+20h]
+004eac42 7508            jne     image00400000+0xeac4c (004eac4c)
+004eac44 090574ab9e00    or      dword ptr [image00400000+0x5eab74 (009eab74)],eax  ; button down
+004eac4a eb1e            jmp     image00400000+0xeac6a (004eac6a)
+004eac4c f7d0            not     eax
+004eac4e 210574ab9e00    and     dword ptr [image00400000+0x5eab74 (009eab74)],eax  ; button up
+004eac54 eb14            jmp     image00400000+0xeac6a (004eac6a)
+...
+004eac6a 8b8fb0000000    mov     ecx,dword ptr [edi+0B0h]
+004eac70 85c9            test    ecx,ecx
+004eac72 7457            je      image00400000+0xeaccb (004eaccb)
+004eac74 0fb74608        movzx   eax,word ptr [esi+8]
+004eac78 83c0f4          add     eax,0FFFFFFF4h
+004eac7b 3dad000000      cmp     eax,0ADh
+004eac80 770e            ja      image00400000+0xeac90 (004eac90)
+004eac82 0fb690ccc14e00  movzx   edx,byte ptr image00400000+0xec1cc (004ec1cc)[eax]
+004eac89 ff2495c4c14e00  jmp     dword ptr image00400000+0xec1c4 (004ec1c4)[edx*4]
+004eac90 8b4304          mov     eax,dword ptr [ebx+4]
+004eac93 f6401001        test    byte ptr [eax+10h],1
+004eac97 56              push    esi
+004eac98 53              push    ebx
+004eac99 7423            je      image00400000+0xeacbe (004eacbe)
+004eac9b e850080800      call    image00400000+0x16b4f0 (0056b4f0)
+004eaca0 84c0            test    al,al
+004eaca2 7427            je      image00400000+0xeaccb (004eaccb)
+...
+004eaccb 0fb74608        movzx   eax,word ptr [esi+8]
+004eaccf 83c0fe          add     eax,0FFFFFFFEh                                 ; eax-2
+004eacd2 83f861          cmp     eax,61h
+004eacd5 7724            ja      image00400000+0xeacfb (004eacfb)        [br=0]
+004eacd7 0fb68088c24e00  movzx   eax,byte ptr image00400000+0xec288 (004ec288)[eax]
+004eacde ff24857cc24e00  jmp     dword ptr image00400000+0xec27c (004ec27c)[eax*4]
+
+004eace5 8d8f8c000000    lea     ecx,[edi+8Ch]
+004eaceb e850303000      call    image00400000+0x3edd40 (007edd40)
+004eacf0 8d8f88000000    lea     ecx,[edi+88h]
+004eacf6 e845303000      call    image00400000+0x3edd40 (007edd40)
+004eacfb 8b4304          mov     eax,dword ptr [ebx+4]
+004eacfe f6401001        test    byte ptr [eax+10h],1
+004ead02 c644243d00      mov     byte ptr [esp+3Dh],0
+004ead07 0f8492100000    je      image00400000+0xebd9f (004ebd9f)
+004ead0d 0fb74e08        movzx   ecx,word ptr [esi+8]
+004ead11 83c1fe          add     ecx,0FFFFFFFEh
+004ead14 81f9c8000000    cmp     ecx,0C8h
+004ead1a 0f877f100000    ja      image00400000+0xebd9f (004ebd9f)
+...
+004eaec3 8a560a          mov     dl,byte ptr [esi+0Ah]
+004eaec6 8b4610          mov     eax,dword ptr [esi+10h]
+004eaec9 8b4e14          mov     ecx,dword ptr [esi+14h]
+004eaecc d0ea            shr     dl,1
+004eaece 8bfb            mov     edi,ebx
+004eaed0 89442450        mov     dword ptr [esp+50h],eax
+004eaed4 894c2454        mov     dword ptr [esp+54h],ecx
+004eaed8 f6c201          test    dl,1
+004eaedb 0f84b4000000    je      image00400000+0xeaf95 (004eaf95)
+004eaee1 8bcb            mov     ecx,ebx
+004eaee3 e81884fbff      call    image00400000+0xa3300 (004a3300)
+004eaee8 85c0            test    eax,eax
+004eaeea 7420            je      image00400000+0xeaf0c (004eaf0c)
+...
+004eaf0c 66837e0802      cmp     word ptr [esi+8],2       ds:0023:0012dc60=0003
+004eaf11 750d            jne     image00400000+0xeaf20 (004eaf20)
+...
+004eaf95 8d44246c        lea     eax,[esp+6Ch]
+004eaf99 50              push    eax
+004eaf9a 895c2470        mov     dword ptr [esp+70h],ebx
+004eaf9e e89d95f2ff      call    image00400000+0x14540 (00414540)
+004eafa3 83c404          add     esp,4
+004eafa6 8d4e18          lea     ecx,[esi+18h]
+004eafa9 c78424c002000001000000 mov dword ptr [esp+2C0h],1
+004eafb4 894c2458        mov     dword ptr [esp+58h],ecx
+004eafb8 8b560c          mov     edx,dword ptr [esi+0Ch]
+004eafbb 51              push    ecx
+004eafbc 8bc4            mov     eax,esp
+004eafbe 89642464        mov     dword ptr [esp+64h],esp
+004eafc2 51              push    ecx
+004eafc3 8910            mov     dword ptr [eax],edx
+004eafc5 8b4e24          mov     ecx,dword ptr [esi+24h]
+004eafc8 8b542460        mov     edx,dword ptr [esp+60h]
+004eafcc 8bc4            mov     eax,esp
+004eafce 8908            mov     dword ptr [eax],ecx
+004eafd0 8b4620          mov     eax,dword ptr [esi+20h]
+004eafd3 0fb74e08        movzx   ecx,word ptr [esi+8]
+004eafd7 89642468        mov     dword ptr [esp+68h],esp
+004eafdb 50              push    eax
+004eafdc 52              push    edx
+004eafdd 8d442460        lea     eax,[esp+60h]
+004eafe1 50              push    eax
+004eafe2 51              push    ecx
+004eafe3 8d8c2430010000  lea     ecx,[esp+130h]
+004eafea e8418b0300      call    image00400000+0x123b30 (00523b30)
+004eafef 8a4e0a          mov     cl,byte ptr [esi+0Ah]
+004eaff2 8b842422010000  mov     eax,dword ptr [esp+122h]
+004eaff9 d0e9            shr     cl,1
+004eaffb 80e101          and     cl,1
+004eaffe 0fb6d1          movzx   edx,cl
+004eb001 6603d2          add     dx,dx
+004eb004 25fdff0000      and     eax,0FFFDh
+004eb009 660bd0          or      dx,ax
+004eb00c 6689942422010000 mov     word ptr [esp+122h],dx
+004eb014 8b4f10          mov     ecx,dword ptr [edi+10h]
+004eb017 8b5104          mov     edx,dword ptr [ecx+4]
+004eb01a c1ea02          shr     edx,2
+004eb01d 80e201          and     dl,1
+004eb020 c68424c002000002 mov     byte ptr [esp+2C0h],2
+004eb028 0f859b000000    jne     image00400000+0xeb0c9 (004eb0c9)
+004eb02e 66837e0805      cmp     word ptr [esi+8],5
+004eb033 0f8590000000    jne     image00400000+0xeb0c9 (004eb0c9)
+...
+004eb0c9 6a00            push    0
+004eb0cb 6a36            push    36h
+004eb0cd 8bcf            mov     ecx,edi
+004eb0cf e8ac01fcff      call    image00400000+0xab280 (004ab280)
+004eb0d4 8bc6            mov     eax,esi
+004eb0d6 3b7d08          cmp     edi,dword ptr [ebp+8]
+004eb0d9 7407            je      image00400000+0xeb0e2 (004eb0e2)
+...
+004eb0e2 8b4c2440        mov     ecx,dword ptr [esp+40h] ss:0023:0012d83c=00fd4c10
+004eb0e6 50              push    eax
+004eb0e7 57              push    edi
+004eb0e8 e813e9ffff      call    image00400000+0xe9a00 (004e9a00)
+--------
+004e9a00 53              push    ebx
+004e9a01 56              push    esi
+004e9a02 8b74240c        mov     esi,dword ptr [esp+0Ch]
+004e9a06 57              push    edi
+004e9a07 8b7c2414        mov     edi,dword ptr [esp+14h]
+...
+004e9a81 57              push    edi
+004e9a82 56              push    esi
+004e9a83 8bcb            mov     ecx,ebx
+004e9a85 e8c654f2ff      call    image00400000+0xef50 (0040ef50)
+004e9a8a 84c0            test    al,al
+004e9a8c 758a            jne     image00400000+0xe9a18 (004e9a18)
+004e9a8e 8b16            mov     edx,dword ptr [esi]
+004e9a90 8b4210          mov     eax,dword ptr [edx+10h]
+004e9a93 57              push    edi
+004e9a94 8bce            mov     ecx,esi
+004e9a96 ffd0            call    eax                                            ; call 004e2780
+--------
+004e2780 53              push    ebx
+004e2781 8b5c2408        mov     ebx,dword ptr [esp+8]
+004e2785 0fb74308        movzx   eax,word ptr [ebx+8]                           ; 3
+...
+004e27eb 53              push    ebx
+004e27ec 8bce            mov     ecx,esi
+004e27ee e84d66feff      call    image00400000+0xc8e40 (004c8e40)
+004e27f3 5f              pop     edi
+004e27f4 5e              pop     esi
+004e27f5 5b              pop     ebx
+004e27f6 c20400          ret     4
+--------
+004c8e40 56              push    esi
+...
+004c8ed5 50              push    eax
+004c8ed6 8bce            mov     ecx,esi
+004c8ed8 e8f34efeff      call    image00400000+0xaddd0 (004addd0)
+004c8edd 5e              pop     esi
+004c8ede c20400          ret     4
+--------
+004addd0 6aff            push    0FFFFFFFFh
+004addd2 68d2cf8100      push    offset image00400000+0x41cfd2 (0081cfd2)
+004addd7 64a100000000    mov     eax,dword ptr fs:[00000000h]
+004adddd 50              push    eax
+004addde 81ece0000000    sub     esp,0E0h
+004adde4 53              push    ebx
+004adde5 55              push    ebp
+004adde6 56              push    esi
+004adde7 57              push    edi
+004adde8 a17c909e00      mov     eax,dword ptr [image00400000+0x5e907c (009e907c)]
+004added 33c4            xor     eax,esp
+004addef 50              push    eax
+004addf0 8d8424f4000000  lea     eax,[esp+0F4h]
+004addf7 64a300000000    mov     dword ptr fs:[00000000h],eax
+004addfd 8bf1            mov     esi,ecx
+004addff 8b4610          mov     eax,dword ptr [esi+10h]
+004ade02 8a4804          mov     cl,byte ptr [eax+4]
+004ade05 80e101          and     cl,1
+004ade08 8b6e04          mov     ebp,dword ptr [esi+4]
+004ade0b 8bbc2404010000  mov     edi,dword ptr [esp+104h]
+004ade12 7424            je      image00400000+0xade38 (004ade38)
+...
+004ade38 0fb74f08        movzx   ecx,word ptr [edi+8]                           ; 3
+004ade3c 83c1fe          add     ecx,0FFFFFFFEh                                 ; #-2
+004ade3f 81f9c4000000    cmp     ecx,0C4h
+004ade45 0f87dc0a0000    ja      image00400000+0xae927 (004ae927)
+004ade4b 0fb689e0ea4a00  movzx   ecx,byte ptr image00400000+0xaeae0 (004aeae0)[ecx]
+004ade52 ff248d18ea4a00  jmp     dword ptr image00400000+0xaea18 (004aea18)[ecx*4]
+...
+; WM_LBUTTONUP hanlder for button control
+004ade7b 8b16            mov     edx,dword ptr [esi]
+004ade7d 8b4240          mov     eax,dword ptr [edx+40h]
+004ade80 57              push    edi
+004ade81 8bce            mov     ecx,esi
+004ade83 ffd0            call    eax                                            ; call 004c9c40
+004ade85 b001            mov     al,1
+004ade87 e9a30a0000      jmp     image00400000+0xae92f (004ae92f)
+--------
+004c9c40 53              push    ebx
+004c9c41 56              push    esi
+004c9c42 8bd9            mov     ebx,ecx
+...
+004c9c72 8b13            mov     edx,dword ptr [ebx]
+004c9c74 8b92c8000000    mov     edx,dword ptr [edx+0C8h]
+004c9c7a 8d4710          lea     eax,[edi+10h]
+004c9c7d 50              push    eax
+004c9c7e ffd2            call    edx                                            ; call 004c8200 (called from lbuttonup only)
+004c9c80 84c0            test    al,al
+004c9c82 741d            je      image00400000+0xc9ca1 (004c9ca1)
+004c9c84 8d8e3c010000    lea     ecx,[esi+13Ch]
+004c9c8a e8b1403200      call    image00400000+0x3edd40 (007edd40)              ; called from lbuttonup & keyup
+004c9c8f 8bce            mov     ecx,esi
+004c9c91 e80afdffff      call    image00400000+0xc99a0 (004c99a0)               ; button_handler (called from lbuttonup & keyup), ecx:h_ctrl
+004c9c96 66834f0a04      or      word ptr [edi+0Ah],4
+004c9c9b 5f              pop     edi
+004c9c9c 5e              pop     esi
+004c9c9d 5b              pop     ebx
+004c9c9e c20400          ret     4
+
+--------------------------------------------------------------------------------
+button_handler(ecx:h_ctrl)
+
+004c99a0 6aff            push    0FFFFFFFFh
+004c99a2 6888f28100      push    offset image00400000+0x41f288 (0081f288)
+004c99a7 64a100000000    mov     eax,dword ptr fs:[00000000h]
+004c99ad 50              push    eax
+004c99ae 51              push    ecx
+004c99af 53              push    ebx
+004c99b0 56              push    esi
+004c99b1 57              push    edi
+004c99b2 a17c909e00      mov     eax,dword ptr [image00400000+0x5e907c (009e907c)]
+004c99b7 33c4            xor     eax,esp
+004c99b9 50              push    eax
+004c99ba 8d442414        lea     eax,[esp+14h]
+004c99be 64a300000000    mov     dword ptr fs:[00000000h],eax
+004c99c4 8bf1            mov     esi,ecx                                        ; h_ctrl
+004c99c6 8b8634010000    mov     eax,dword ptr [esi+134h]                       ; btn_state
+004c99cc 8b7e04          mov     edi,dword ptr [esi+4]
+004c99cf 83e0ef          and     eax,0FFFFFFEFh                                 ; btn_state &= (~0x10) -> modify "active" state
+004c99d2 83c820          or      eax,20h                                        ; btn_state |= 0x20 -> set "processed" state
+004c99d5 898634010000    mov     dword ptr [esi+134h],eax
+004c99db b301            mov     bl,1
+004c99dd a802            test    al,2
+004c99df 742e            je      image00400000+0xc9a0f (004c9a0f)               ; if (btn_state&2) -> button in opened state (green)
+; opened button
+004c99e1 e8eaf8ffff      call    image00400000+0xc92d0 (004c92d0)
+004c99e6 3bc7            cmp     eax,edi
+004c99e8 7525            jne     image00400000+0xc9a0f (004c9a0f)
+004c99ea 8b8638010000    mov     eax,dword ptr [esi+138h]
+004c99f0 85c0            test    eax,eax
+004c99f2 7409            je      image00400000+0xc99fd (004c99fd)
+004c99f4 8b4004          mov     eax,dword ptr [eax+4]
+004c99f7 0fb64058        movzx   eax,byte ptr [eax+58h]
+004c99fb eb0c            jmp     image00400000+0xc9a09 (004c9a09)
+004c99fd 8b8634010000    mov     eax,dword ptr [esi+134h]
+004c9a03 c1e803          shr     eax,3
+004c9a06 83e001          and     eax,1
+004c9a09 85c0            test    eax,eax
+004c9a0b 7402            je      image00400000+0xc9a0f (004c9a0f)
+004c9a0d 32db            xor     bl,bl
+
+004c9a0f 8d442410        lea     eax,[esp+10h]
+004c9a13 50              push    eax
+004c9a14 897c2414        mov     dword ptr [esp+14h],edi
+004c9a18 e823abf4ff      call    image00400000+0x14540 (00414540)               ; common call; nothing special
+004c9a1d 83c404          add     esp,4
+004c9a20 c744241c00000000 mov     dword ptr [esp+1Ch],0
+004c9a28 84db            test    bl,bl
+004c9a2a 741a            je      image00400000+0xc9a46 (004c9a46)
+004c9a2c 8b17            mov     edx,dword ptr [edi]
+004c9a2e 8b82d0000000    mov     eax,dword ptr [edx+0D0h]
+004c9a34 8bcf            mov     ecx,edi
+004c9a36 ffd0            call    eax                                            ; call 004c9c10 (toogle button state: opened->closed->opened->...)
+004c9a38 837c241000      cmp     dword ptr [esp+10h],0
+004c9a3d 7507            jne     image00400000+0xc9a46 (004c9a46)
+004c9a3f 8d4c2410        lea     ecx,[esp+10h]
+004c9a43 51              push    ecx
+004c9a44 eb46            jmp     image00400000+0xc9a8c (004c9a8c)
+004c9a46 83a634010000df  and     dword ptr [esi+134h],0FFFFFFDFh                ; btn_state &= (~0x20) clear "processed" state
+004c9a4d 8b8634010000    mov     eax,dword ptr [esi+134h]
+004c9a53 8b4e04          mov     ecx,dword ptr [esi+4]
+004c9a56 a820            test    al,20h
+004c9a58 7505            jne     image00400000+0xc9a5f (004c9a5f)               ; check "active" state (never jumps)
+004c9a5a e821edfdff      call    image00400000+0xa8780 (004a8780)               ; common call
+004c9a5f 8bcf            mov     ecx,edi
+004c9a61 e84a04feff      call    image00400000+0xa9eb0 (004a9eb0)               ; update visual state accoridng to a new state
+004c9a66 e87553f4ff      call    image00400000+0xede0 (0040ede0)                ; hook after state update (does nothing)
+004c9a6b 837c241000      cmp     dword ptr [esp+10h],0                          ; !=0
+004c9a70 7415            je      image00400000+0xc9a87 (004c9a87)
+004c9a72 8bce            mov     ecx,esi
+004c9a74 e8d7f0ffff      call    image00400000+0xc8b50 (004c8b50)               ; nothing special - doesn't reference button's state
+004c9a79 837c241000      cmp     dword ptr [esp+10h],0
+004c9a7e 7407            je      image00400000+0xc9a87 (004c9a87)               ; !=0
+004c9a80 8bce            mov     ecx,esi
+004c9a82 e819efffff      call    image00400000+0xc89a0 (004c89a0)               ; call_action_handler()
+
+004c9a87 8d542410        lea     edx,[esp+10h]
+004c9a8b 52              push    edx
+004c9a8c c7442420ffffffff mov     dword ptr [esp+20h],0FFFFFFFFh
+004c9a94 e877abf4ff      call    image00400000+0x14610 (00414610)               ; common call; nothing special
+004c9a99 83c404          add     esp,4
+004c9a9c 8b4c2414        mov     ecx,dword ptr [esp+14h]
+004c9aa0 64890d00000000  mov     dword ptr fs:[0],ecx
+004c9aa7 59              pop     ecx
+004c9aa8 5f              pop     edi
+004c9aa9 5e              pop     esi
+004c9aaa 5b              pop     ebx
+004c9aab 83c410          add     esp,10h
+004c9aae c3              ret
+
+--------------------------------------------------------------------------------
+call_action_handler()
+
+004c89a0 6aff            push    0FFFFFFFFh
+...
+004c89c7 8be9            mov     ebp,ecx
+004c89c9 8b7d04          mov     edi,dword ptr [ebp+4]
+004c89cc 8d442414        lea     eax,[esp+14h]
+004c89d0 50              push    eax
+004c89d1 897c2418        mov     dword ptr [esp+18h],edi
+004c89d5 e866bbf4ff      call    image00400000+0x14540 (00414540)               ; common call; nothing special
+004c89da 83c404          add     esp,4
+004c89dd 8b8d34010000    mov     ecx,dword ptr [ebp+134h]
+004c89e3 d1e9            shr     ecx,1
+004c89e5 80e101          and     cl,1
+004c89e8 0fb6d1          movzx   edx,cl
+004c89eb 52              push    edx                                            ; arg: button state: 1:opened, 0:closed
+004c89ec 8bcf            mov     ecx,edi
+004c89ee c744242800000000 mov     dword ptr [esp+28h],0
+004c89f6 e805491200      call    image00400000+0x1ed300 (005ed300)
+...
+--------
+005ed300 83ec08          sub     esp,8
+005ed303 8d1424          lea     edx,[esp]
+005ed306 52              push    edx
+005ed307 6a02            push    2
+005ed309 8d442414        lea     eax,[esp+14h]
+005ed30d 6880ab8f00      push    offset image00400000+0x4fab80 (008fab80)
+005ed312 51              push    ecx
+005ed313 c744241000000000 mov     dword ptr [esp+10h],0
+005ed31b 89442414        mov     dword ptr [esp+14h],eax
+005ed31f e81c7be2ff      call    image00400000+0x14e40 (00414e40)               ; call action
+005ed324 83c418          add     esp,18h
+005ed327 c20400          ret     4
+--------
+00414e40 55              push    ebp
+00414e41 8bec            mov     ebp,esp
+...
+004150f1 50              push    eax
+004150f2 57              push    edi
+004150f3 6a00            push    0
+004150f5 56              push    esi
+004150f6 e825d90300      call    image00400000+0x52a20 (00452a20)
+004150fb a1dca69e00      mov     eax,dword ptr [image00400000+0x5ea6dc (009ea6dc)]
+--------
+00452a49 8b542410        mov     edx,dword ptr [esp+10h]
+00452a4d 8b01            mov     eax,dword ptr [ecx]
+00452a4f 8b4008          mov     eax,dword ptr [eax+8]
+00452a52 52              push    edx
+00452a53 8b542410        mov     edx,dword ptr [esp+10h]
+00452a57 52              push    edx
+00452a58 8b542410        mov     edx,dword ptr [esp+10h]
+00452a5c 52              push    edx
+00452a5d ffd0            call    eax                                            ; action dispatcher
+00452a5f c3              ret
+--------
+00404070 55              push    ebp
+00404071 8bec            mov     ebp,esp
+00404073 8b4510          mov     eax,dword ptr [ebp+10h]
+00404076 53              push    ebx
+00404077 56              push    esi
+00404078 57              push    edi
+00404079 8b7d08          mov     edi,dword ptr [ebp+8]
+0040407c 8bf1            mov     esi,ecx
+0040407e 8b4d0c          mov     ecx,dword ptr [ebp+0Ch]
+00404081 50              push    eax
+00404082 51              push    ecx
+00404083 57              push    edi
+00404084 8bce            mov     ecx,esi
+00404086 e8a58e0c00      call    image00400000+0xccf30 (004ccf30)
+0040408b 8bd8            mov     ebx,eax
+0040408d 85db            test    ebx,ebx
+0040408f 0f8854010000    js      image00400000+0x41e9 (004041e9)
+00404095 85ff            test    edi,edi
+00404097 0f854a010000    jne     image00400000+0x41e7 (004041e7)
+0040409d 83fb10          cmp     ebx,10h
+004040a0 0f873e010000    ja      image00400000+0x41e4 (004041e4)
+004040a6 ff249df0414000  jmp     dword ptr image00400000+0x41f0 (004041f0)[ebx*4]   ; jump ro requested proc
+004040ad 8bce            mov     ecx,esi
+004040af e85cfdffff      call    image00400000+0x3e10 (00403e10)                ; button 0x01
+004040b4 5f              pop     edi
+004040b5 83eb11          sub     ebx,11h
+004040b8 5e              pop     esi
+004040b9 8bc3            mov     eax,ebx
+004040bb 5b              pop     ebx
+004040bc 5d              pop     ebp
+004040bd c20c00          ret     0Ch
+004040c0 8bce            mov     ecx,esi
+004040c2 e869fdffff      call    image00400000+0x3e30 (00403e30)                ; button 0x02
+004040c7 5f              pop     edi
+004040c8 83eb11          sub     ebx,11h
+004040cb 5e              pop     esi
+004040cc 8bc3            mov     eax,ebx
+004040ce 5b              pop     ebx
+004040cf 5d              pop     ebp
+004040d0 c20c00          ret     0Ch
+004040d3 8bce            mov     ecx,esi
+004040d5 e876fdffff      call    image00400000+0x3e50 (00403e50)                ; button 0x03
+004040da 5f              pop     edi
+004040db 83eb11          sub     ebx,11h
+004040de 5e              pop     esi
+004040df 8bc3            mov     eax,ebx
+004040e1 5b              pop     ebx
+004040e2 5d              pop     ebp
+004040e3 c20c00          ret     0Ch
+004040e6 8bce            mov     ecx,esi
+004040e8 e883fdffff      call    image00400000+0x3e70 (00403e70)                ; button 0x04
+004040ed 5f              pop     edi
+004040ee 83eb11          sub     ebx,11h
+004040f1 5e              pop     esi
+004040f2 8bc3            mov     eax,ebx
+004040f4 5b              pop     ebx
+004040f5 5d              pop     ebp
+004040f6 c20c00          ret     0Ch
+004040f9 8bce            mov     ecx,esi
+004040fb e890fdffff      call    image00400000+0x3e90 (00403e90)                ; button 0x05
+00404100 5f              pop     edi
+00404101 83eb11          sub     ebx,11h
+00404104 5e              pop     esi
+00404105 8bc3            mov     eax,ebx
+00404107 5b              pop     ebx
+00404108 5d              pop     ebp
+00404109 c20c00          ret     0Ch
+0040410c 8bce            mov     ecx,esi
+0040410e e89dfdffff      call    image00400000+0x3eb0 (00403eb0)                ; button 0x06
+00404113 5f              pop     edi
+00404114 83eb11          sub     ebx,11h
+00404117 5e              pop     esi
+00404118 8bc3            mov     eax,ebx
+0040411a 5b              pop     ebx
+0040411b 5d              pop     ebp
+0040411c c20c00          ret     0Ch
+0040411f 8bce            mov     ecx,esi
+00404121 e8aafdffff      call    image00400000+0x3ed0 (00403ed0)                ; button 0x07
+00404126 5f              pop     edi
+00404127 83eb11          sub     ebx,11h
+0040412a 5e              pop     esi
+0040412b 8bc3            mov     eax,ebx
+0040412d 5b              pop     ebx
+0040412e 5d              pop     ebp
+0040412f c20c00          ret     0Ch
+00404132 8bce            mov     ecx,esi
+00404134 e8b7fdffff      call    image00400000+0x3ef0 (00403ef0)                ; button 0x08
+00404139 5f              pop     edi
+0040413a 83eb11          sub     ebx,11h
+0040413d 5e              pop     esi
+0040413e 8bc3            mov     eax,ebx
+00404140 5b              pop     ebx
+00404141 5d              pop     ebp
+00404142 c20c00          ret     0Ch
+00404145 8bce            mov     ecx,esi
+00404147 e8c4fdffff      call    image00400000+0x3f10 (00403f10)                ; button 0x09
+0040414c 5f              pop     edi
+0040414d 83eb11          sub     ebx,11h
+00404150 5e              pop     esi
+00404151 8bc3            mov     eax,ebx
+00404153 5b              pop     ebx
+00404154 5d              pop     ebp
+00404155 c20c00          ret     0Ch
+00404158 8bce            mov     ecx,esi
+0040415a e8d1fdffff      call    image00400000+0x3f30 (00403f30)                ; button 0x0a
+0040415f 5f              pop     edi
+00404160 83eb11          sub     ebx,11h
+00404163 5e              pop     esi
+00404164 8bc3            mov     eax,ebx
+00404166 5b              pop     ebx
+00404167 5d              pop     ebp
+00404168 c20c00          ret     0Ch
+0040416b 8bce            mov     ecx,esi
+0040416d e8defdffff      call    image00400000+0x3f50 (00403f50)                ; button 0x0b
+00404172 5f              pop     edi
+00404173 83eb11          sub     ebx,11h
+00404176 5e              pop     esi
+00404177 8bc3            mov     eax,ebx
+00404179 5b              pop     ebx
+0040417a 5d              pop     ebp
+0040417b c20c00          ret     0Ch
+0040417e 8bce            mov     ecx,esi
+00404180 e8ebfdffff      call    image00400000+0x3f70 (00403f70)                ; button 0x0c
+00404185 5f              pop     edi
+00404186 83eb11          sub     ebx,11h
+00404189 5e              pop     esi
+0040418a 8bc3            mov     eax,ebx
+0040418c 5b              pop     ebx
+0040418d 5d              pop     ebp
+0040418e c20c00          ret     0Ch
+00404191 8bce            mov     ecx,esi
+00404193 e8f8fdffff      call    image00400000+0x3f90 (00403f90)                ; button 0x0d
+00404198 5f              pop     edi
+00404199 83eb11          sub     ebx,11h
+0040419c 5e              pop     esi
+0040419d 8bc3            mov     eax,ebx
+0040419f 5b              pop     ebx
+004041a0 5d              pop     ebp
+004041a1 c20c00          ret     0Ch
+004041a4 8bce            mov     ecx,esi
+004041a6 e805feffff      call    image00400000+0x3fb0 (00403fb0)                ; button 0x0e
+004041ab 5f              pop     edi
+004041ac 83eb11          sub     ebx,11h
+004041af 5e              pop     esi
+004041b0 8bc3            mov     eax,ebx
+004041b2 5b              pop     ebx
+004041b3 5d              pop     ebp
+004041b4 c20c00          ret     0Ch
+004041b7 8bce            mov     ecx,esi
+004041b9 e812feffff      call    image00400000+0x3fd0 (00403fd0)                ; button 0x0f
+004041be 5f              pop     edi
+004041bf 83eb11          sub     ebx,11h
+004041c2 5e              pop     esi
+004041c3 8bc3            mov     eax,ebx
+004041c5 5b              pop     ebx
+004041c6 5d              pop     ebp
+004041c7 c20c00          ret     0Ch
+004041ca 8bce            mov     ecx,esi
+004041cc e81ffeffff      call    image00400000+0x3ff0 (00403ff0)                ; button 0x10
+004041d1 5f              pop     edi
+004041d2 83eb11          sub     ebx,11h
+004041d5 5e              pop     esi
+004041d6 8bc3            mov     eax,ebx
+004041d8 5b              pop     ebx
+004041d9 5d              pop     ebp
+004041da c20c00          ret     0Ch
+004041dd 8bce            mov     ecx,esi
+004041df e80cd9ffff      call    image00400000+0x1af0 (00401af0)
+004041e4 83eb11          sub     ebx,11h
+004041e7 8bc3            mov     eax,ebx
+004041e9 5f              pop     edi
+004041ea 5e              pop     esi
+004041eb 5b              pop     ebx
+004041ec 5d              pop     ebp
+004041ed c20c00          ret     0Ch

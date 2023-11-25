@@ -1,0 +1,19 @@
+0:000> !dump_pe_info export 0x10000000
+INFO: Base address of the module: 0x10000000 []
+INFO: Export Directory at: 0x1000e5e0
+INFO: RVA provided in [], '#' precedes ordinals, 'h:' denotes hints
+
+0x1000e5e0[0x0000E5E0] dll_overloader.dll Export Directory:
+  Characteristics:      0x00000000
+  Timestamp:            0x538F0332
+  Major version:        0x0000
+  Minor version:        0x0000
+  Module name at:       0x1000e612[0x0000E612]
+  Ordinal base:         0x00000001
+  Address tab. entries: 0x00000001
+  Number of name ptrs:  0x00000001
+  Export addr table at: 0x1000e608[0x0000E608]
+  Name ptrs table at:   0x1000e60c[0x0000E60C]
+  Ordinals table at:    0x1000e610[0x0000E610]
+ Exports:
+  0x10001020[0x00001020]: #0x0001 h:0x0000 0x1000e625[0x0000E625] _vovr@8

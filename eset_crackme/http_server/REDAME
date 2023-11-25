@@ -1,0 +1,2 @@
+1. Set JAVA_HOME environment in the start.bat before running the HTTP server.
+2. Handling servlet source located in: .\apache-tomcat\webapps\ROOT\WEB-INF\classes

@@ -1,0 +1,853 @@
+global data:
+  00416d28 dword  obf_dta_init[12]        // used to init obfus_data
+  00417c48 dword  g_remote_code_size      // size of remote thread's code
+  00417de0 byte   g_key_val[]             // key value used by the remote thread call
+  00417e90 byte   g_xor_tab[0x102]        // used by xor_with_tab() to xor edit's input
+  00417e80 dword  g_pass_length           // the correct pass length (probably)
+  00417e84 byte  *g_seed_xor_tab          // points to string used for g_xor_tab initialization
+  00417e88 obfus_data  *g_obf_dta         // used to pass obfus_data
+  00417e8c dword  g_glob_dta_sub          // used to pass subset of the global data (starting from g_LoadLibraryA)
+
+  global data subset:
+  00417f98 dword  g_LoadLibraryA          // off:0x0000
+  00417f9c dword  g_get_proc_addr_obfus   // off:0x0004
+  00417fa0 byte   g_remotemod_called      // off:0x0008; ==TRUE if the remote thread in the remote module has been called
+  00417fa4 dword  g_event_obj             // off:0x000c
+  00417fa8 dword  g_hwndDlg               // off:0x0010; dialog window hanlde (HWND)
+  00417fac dword  g_prev_ed2_wnd_prc      // off:0x0014
+  00417fb0 byte   g_input[0x80]           // off:0x0018; user input in the 2nd stage edit
+  00418030 byte   g_remotemod_full_name[0x100]  // off:0x0098
+  00418130 dword  g_CallWindowProcA       // off:0x0198
+
+
+The struct contains pointers to obfuscated data (sizeof(obfus_data)==0x7c)
+  struct obfus_data
+  {
+    obfus_FindWindowExA,            // off: 0x00; obfuscated func name (form user32.dll)
+    b64_Edit,                       // off: 0x04; B64 "RURJVA==": "EDIT" (window class name)
+    b64_User32,                     // off: 0x08; B64 "dXNlcjMyLmRsbA==": "user32.dll"
+    obfus_CallWindowProcA,          // off: 0x0c; obfuscated func name (form user32.dll)
+    obfus_SetWindowLongA,           // off: 0x10; obfuscated func name (form user32.dll)
+    obfus_GetSystemDirectoryA,      // off: 0x14; obfuscated func name (form kernel.dll)
+    b64_kernel32,                   // off: 0x18; B64 "a2VybmVsMzIuZGxs": "kernel32.dll"
+    b64_remotemod,                  // off: 0x1c; B64 "XHVzZXJpbml0LmV4ZQ==": "\userinit.exe"
+    obfus_CreateProcessA,           // off: 0x20; obfuscated func name (form kernel.dll)
+    obfus_VirtualAllocEx,           // off: 0x24; obfuscated func name (form kernel.dll)
+    obfus_WriteProcessMemory,       // off: 0x28; obfuscated func name (form kernel.dll)
+    obfus_CreateRemoteThread        // off: 0x2c; obfuscated func name (form kernel.dll)
+
+    // more data (2nd part) used by remote thread and initialized by init_obfus_data_for_remote()
+    // proc name obfuscation differs from the one used by names in the 1st part of the struct 
+    obfus_MessageBoxA,              // off: 0x30; obfuscated func name (form user32.dll)
+    b64_End,                        // off: 0x34; B64 "VEhFIEVORC4=": "THE END."
+    b64_http_host,                  // off: 0x38; B64 "bG9jYWxob3N0": "localhost"
+    b64_agent,                      // off: 0x3c; B64 "d2dldA==": "wget"
+    b64_http_method,                // off: 0x40; B64 "UE9TVA==": "POST"
+    b64_url,                        // off: 0x44; B64 "aW5kZXgucGhw": "index.php"
+    b64_cont_tpy,                   // off: 0x48; B64 "Q29udGVudC1UeXBlOmFwcGxpY2F0aW9uL3gtd3d3LWZvcm0tdXJsZW5jb2RlZA==": "Content-Type:application/x-www-form-urlencoded"
+    b64_key_prm,                    // off: 0x4c; B64 "a2V5PQ==": "key="
+    b64_xored_pass,                 // off: 0x50; B64 "IWJ3OA==": "!bw8"
+    b64_blup,                       // off: 0x54; B64 "Ymx1cA==": "blup"
+    b64_wininet,                    // off: 0x58; B64 "d2luaW5ldC5kbGw=": "wininet.dll"
+    obfus_InternetOpenA,            // off: 0x5c; obfuscated func name (form wininet.dll)
+    obfus_LoadLibraryA,             // off: 0x60; obfuscated func name (form kernel.dll)
+    obfus_InternetConnectA,         // off: 0x64; obfuscated func name (form wininet.dll)
+    obfus_HttpOpenRequestA,         // off: 0x68; obfuscated func name (form wininet.dll)
+    obfus_HttpSendRequestA,         // off: 0x6c; obfuscated func name (form wininet.dll)
+    obfus_InternetReadFile,         // off: 0x70; obfuscated func name (form wininet.dll)
+    obfus_InternetCloseHandle,      // off: 0x74; obfuscated func name (form wininet.dll)
+    obfus_ExitProcess,              // off: 0x78; obfuscated func name (form kernel.dll)
+  }
+
+password analysis:
+  xor_with_tab(zeros[], 0x100, g_xor_tab[]) gives:
+    0000 91 1e 0f 8f b8 c4 a1 ac 99 d5 8c a5 15 ab 85 00
+    0010 87 a6 04 50 6e b0 56 5b 96 f7 4f 28 33 37 ca da
+    0020 a7 1c 80 de 44 9e 2c 1c ff dd c6 76 3c 1f b6 be
+    0030 0e fe cf a4 98 ce bc fe 32 03 d6 da e5 0c d3 fe
+    0040 cd 6c 9a 5a b5 92 a1 b5 ef 2f 40 a4 da a5 12 b6
+    0050 1d bc 9e 9e 31 6b a3 c5 20 af a3 85 f5 22 5a d7
+    0060 f1 63 ac 4f 61 de 14 d0 55 5b 84 f3 69 06 32 39
+    0070 a1 11 44 dc de bb 06 d6 c6 10 9e 2b 8a 46 25 f0
+    0080 b3 c8 6b b8 0f 10 11 7b a1 45 d2 3e 2b 0d 3a 5b
+    0090 86 63 2b 18 19 ca 75 fc 3e 17 d1 84 c0 2d 87 b6
+    00a0 d6 6c 8f 83 31 5e e1 94 59 e6 ae c1 e0 5f 8c 34
+    00b0 07 df 43 3b 0c 40 c5 26 b4 da 71 12 c4 4f c6 9e
+    00c0 64 1d 35 89 7e ba 6d 4b 4c a0 a6 ed df f7 8e 1e
+    00d0 26 5c c0 78 1e 84 2f b7 25 8e 89 7b 09 da f7 fa
+    00e0 96 62 13 76 48 e2 d3 ae 59 38 03 1c 6a 5d e7 6a
+    00f0 64 3e 61 bc 4c 94 ce 95 32 40 fe 1b ba ac c7 70
+
+  xored_pass:
+    00415814 e1 7f 7c fc 82 95 da 89 c1 e9 fe f6 46 90 d6 35
+
+  stage 2 edit password:
+    91^e1, 1e^7f, 0f^7c, 8f^fc, b8^82, c4^95, a1^da, ac^89, 99^c1, d5^e9, 8c^fe, a5^f6, 15^46, ab^90, 85^d6, 00^35
+    70     61     73     73     3a     51     7b     25     58     3c     72     53     53     3b     53     35    -> "pass:Q{%X<rSS;S5"
+
+
+;
+; init_ed2(HWND hwndDlg)
+; Initializes stage 2 edit by setting necessary global data and setting its wnd_proc
+; (by a separate thread).
+;
+004027f0 55              push    ebp
+004027f1 8bec            mov     ebp,esp
+004027f3 51              push    ecx
+004027f4 c605a07f410000  mov     byte ptr [image00400000+0x17fa0 (00417fa0)],0      ; g_remotemod_called=FALSE
+004027fb b8000c5932      mov     eax,32590C00h
+00402800 058c55e8cd      add     eax,0CDE8558Ch
+00402805 a3847e4100      mov     dword ptr [image00400000+0x17e84 (00417e84)],eax   ; g_seed_xor_tab -> "8[^5" at addr 0x0041618c
+0040280a b83a5a3b77      mov     eax,773B5A3Ah
+0040280f 05faf80589      add     eax,8905F8FAh
+00402814 a3807e4100      mov     dword ptr [image00400000+0x17e80 (00417e80)],eax   ; g_pass_length = 0x10 at addr 0x00415334
+00402819 8b4508          mov     eax,dword ptr [ebp+8]
+0040281c 6a00            push    0                                                  ; arg: no name
+0040281e 6a01            push    1                                                  ; arg: initial state signaled
+00402820 6a00            push    0                                                  ; arg: no manual reset
+00402822 6a00            push    0                                                  ; arg: no security attrs
+00402824 a3a87f4100      mov     dword ptr [image00400000+0x17fa8 (00417fa8)],eax   ; g_hwndDlg = hwndDlg
+00402829 ff153ce04000    call    dword ptr [image00400000+0xe03c (0040e03c)]    ; event_obj = kernel32!CreateEventA(): create g_event_obj (initially signalled)
+0040282f 6a7c            push    7Ch
+00402831 a3a47f4100      mov     dword ptr [image00400000+0x17fa4 (00417fa4)],eax   ; g_event_obj = event_obj
+00402836 e8331e0000      call    image00400000+0x466e (0040466e)                ; obf_dta = malloc(0x7c) of type obfus_data
+0040283b 83c404          add     esp,4
+0040283e 85c0            test    eax,eax
+00402840 7455            je      image00400000+0x2897 (00402897)
+; initialize g_obf_dta
+00402842 c700286d4100    mov     dword ptr [eax],offset image00400000+0x16d28 (00416d28)
+00402848 c7400424264100  mov     dword ptr [eax+4],offset image00400000+0x12624 (00412624)
+0040284f c7400830264100  mov     dword ptr [eax+8],offset image00400000+0x12630 (00412630)
+00402856 c7400c146d4100  mov     dword ptr [eax+0Ch],offset image00400000+0x16d14 (00416d14)
+0040285d c74010006d4100  mov     dword ptr [eax+10h],offset image00400000+0x16d00 (00416d00)
+00402864 c74014ec6c4100  mov     dword ptr [eax+14h],offset image00400000+0x16cec (00416cec)
+0040286b c7401844264100  mov     dword ptr [eax+18h],offset image00400000+0x12644 (00412644)
+00402872 c7401c58264100  mov     dword ptr [eax+1Ch],offset image00400000+0x12658 (00412658)
+00402879 c74020d86c4100  mov     dword ptr [eax+20h],offset image00400000+0x16cd8 (00416cd8)
+00402880 c74024c46c4100  mov     dword ptr [eax+24h],offset image00400000+0x16cc4 (00416cc4)
+00402887 c74028b06c4100  mov     dword ptr [eax+28h],offset image00400000+0x16cb0 (00416cb0)
+0040288e c7402c9c6c4100  mov     dword ptr [eax+2Ch],offset image00400000+0x16c9c (00416c9c)
+00402895 eb02            jmp     image00400000+0x2899 (00402899)
+00402897 33c0            xor     eax,eax
+00402899 a3887e4100      mov     dword ptr [image00400000+0x17e88 (00417e88)],eax   ; g_obf_dta = obf_dta
+0040289e 85c0            test    eax,eax
+004028a0 741a            je      image00400000+0x28bc (004028bc)
+004028a2 8d45fc          lea     eax,[ebp-4]
+004028a5 50              push    eax
+004028a6 6a00            push    0
+004028a8 68987f4100      push    offset image00400000+0x17f98 (00417f98)        ; used to pass subset of the global data
+004028ad 68e0274000      push    offset image00400000+0x27e0 (004027e0)         ; ed2_set_wndproc_thread_proc
+004028b2 6a00            push    0
+004028b4 6a00            push    0
+004028b6 ff1540e04000    call    dword ptr [image00400000+0xe040 (0040e040)]    ; kernel32!CreateThread()
+
+004028bc 56              push    esi
+004028bd b9987f4100      mov     ecx,offset image00400000+0x17f98 (00417f98)
+004028c2 e8a9f4ffff      call    image00400000+0x1d70 (00401d70)                ; sets: g_LoadLibraryA, g_get_proc_addr_obfus
+004028c7 8b0d847e4100    mov     ecx,dword ptr [image00400000+0x17e84 (00417e84)]   ; g_seed_xor_tab
+004028cd 8bd1            mov     edx,ecx
+004028cf 8d7201          lea     esi,[edx+1]
+004028d2 8a02            mov     al,byte ptr [edx]
+004028d4 42              inc     edx
+004028d5 84c0            test    al,al
+004028d7 75f9            jne     image00400000+0x28d2 (004028d2)
+004028d9 2bd6            sub     edx,esi
+004028db 68907e4100      push    offset image00400000+0x17e90 (00417e90)
+004028e0 e8fbedffff      call    image00400000+0x16e0 (004016e0)                ; init_xor_tab(edx:strlen(g_seed_xor_tab), ecx:g_seed_xor_tab, g_xor_tab)
+004028e5 83c404          add     esp,4
+004028e8 5e              pop     esi
+004028e9 8be5            mov     esp,ebp
+004028eb 5d              pop     ebp
+004028ec c20400          ret     4
+
+;
+; ed2_set_wndproc_thread_proc()
+; Waits 2 secs for WM_INITDIALOG init and sets 2nd stage edit wnd_proc.
+;
+004027e0 55              push    ebp
+004027e1 8bec            mov     ebp,esp
+004027e3 8b4d08          mov     ecx,dword ptr [ebp+8]                          ; glob_dta_sub = &g_LoadLibraryA
+004027e6 e855feffff      call    image00400000+0x2640 (00402640)
+004027eb 33c0            xor     eax,eax
+004027ed 5d              pop     ebp
+004027ee c3              ret
+
+00402640 55              push    ebp
+00402641 8bec            mov     ebp,esp
+00402643 6aff            push    0FFFFFFFFh
+00402645 68d6d14000      push    offset image00400000+0xd1d6 (0040d1d6)
+0040264a 64a100000000    mov     eax,dword ptr fs:[00000000h]
+00402650 50              push    eax
+00402651 83ec0c          sub     esp,0Ch
+00402654 53              push    ebx
+00402655 56              push    esi
+00402656 57              push    edi
+00402657 a1b0404100      mov     eax,dword ptr [image00400000+0x140b0 (004140b0)]
+0040265c 33c5            xor     eax,ebp
+0040265e 50              push    eax
+0040265f 8d45f4          lea     eax,[ebp-0Ch]
+00402662 64a300000000    mov     dword ptr fs:[00000000h],eax
+
+00402668 8bf1            mov     esi,ecx                                        ; glob_dta_sub
+0040266a 68d0070000      push    7D0h
+0040266f ff1538e04000    call    dword ptr [image00400000+0xe038 (0040e038)]    ; kernel32!Sleep(2000): sleep 2 secs (wait for WM_INITDIALOG initialization to finish)
+00402675 6a08            push    8
+00402677 c745ec00000000  mov     dword ptr [ebp-14h],0
+0040267e e8eb1f0000      call    image00400000+0x466e (0040466e)
+00402683 83c404          add     esp,4
+00402686 8945e8          mov     dword ptr [ebp-18h],eax                        ; b64_edit = malloc(8), of type struct { byte *data; dword len }
+00402689 c745fc00000000  mov     dword ptr [ebp-4],0
+00402690 85c0            test    eax,eax
+00402692 7414            je      image00400000+0x26a8 (004026a8)
+00402694 8b0d887e4100    mov     ecx,dword ptr [image00400000+0x17e88 (00417e88)]
+0040269a ff7104          push    dword ptr [ecx+4]                              ; g_obf_dta->b64_Edit
+0040269d 8bc8            mov     ecx,eax
+0040269f e80c1a0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "EDIT" in b64_edit
+004026a4 8bd8            mov     ebx,eax
+004026a6 eb02            jmp     image00400000+0x26aa (004026aa)
+004026a8 33db            xor     ebx,ebx
+004026aa c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+004026b1 895de8          mov     dword ptr [ebp-18h],ebx                        ; b64_edit
+004026b4 85db            test    ebx,ebx
+004026b6 0f84f5000000    je      image00400000+0x27b1 (004027b1)                ; if no memory goto finish
+
+004026bc 6a08            push    8
+004026be e8ab1f0000      call    image00400000+0x466e (0040466e)                ; b64_usr32 = malloc(8)
+004026c3 83c404          add     esp,4
+004026c6 8945ec          mov     dword ptr [ebp-14h],eax
+004026c9 c745fc01000000  mov     dword ptr [ebp-4],1
+004026d0 85c0            test    eax,eax
+004026d2 7414            je      image00400000+0x26e8 (004026e8)
+004026d4 8b0d887e4100    mov     ecx,dword ptr [image00400000+0x17e88 (00417e88)]
+004026da ff7108          push    dword ptr [ecx+8]                              ; g_obf_dta->b64_User32
+004026dd 8bc8            mov     ecx,eax
+004026df e8cc190000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "user32.dll" in b64_usr32
+004026e4 8bf8            mov     edi,eax
+004026e6 eb02            jmp     image00400000+0x26ea (004026ea)
+004026e8 33ff            xor     edi,edi
+004026ea c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+004026f1 897dec          mov     dword ptr [ebp-14h],edi                        ; b64_usr32
+004026f4 85ff            test    edi,edi                                        ; if no memory goto finish
+004026f6 0f84b5000000    je      image00400000+0x27b1 (004027b1)
+
+004026fc 837e0400        cmp     dword ptr [esi+4],0
+00402700 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402705 89358c7e4100    mov     dword ptr [image00400000+0x17e8c (00417e8c)],esi ; g_glob_dta_sub = glob_dta_sub
+0040270b 8b10            mov     edx,dword ptr [eax]                            ; g_obf_dta->obfus_FindWindowExA
+0040270d 741b            je      image00400000+0x272a (0040272a)                ; is g_get_proc_addr_obfus present?
+0040270f 8b0e            mov     ecx,dword ptr [esi]
+00402711 85c9            test    ecx,ecx
+00402713 7415            je      image00400000+0x272a (0040272a)                ; is g_LoadLibraryA present?
+00402715 52              push    edx
+00402716 ff37            push    dword ptr [edi]
+00402718 ffd1            call    ecx                                            ; g_LoadLibraryA("user32.dll")
+0040271a 50              push    eax
+0040271b 8b4604          mov     eax,dword ptr [esi+4]
+0040271e ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns USER32!FindWindowExA
+00402720 8945f0          mov     dword ptr [ebp-10h],eax                        ; USER32!FindWindowExA
+
+00402723 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402728 eb05            jmp     image00400000+0x272f (0040272f)
+0040272a 33c9            xor     ecx,ecx
+0040272c 894df0          mov     dword ptr [ebp-10h],ecx
+
+0040272f 837e0400        cmp     dword ptr [esi+4],0
+00402733 8b480c          mov     ecx,dword ptr [eax+0Ch]                        ; g_obf_dta->obfus_CallWindowProcA
+00402736 7413            je      image00400000+0x274b (0040274b)
+00402738 8b06            mov     eax,dword ptr [esi]
+0040273a 85c0            test    eax,eax
+0040273c 740d            je      image00400000+0x274b (0040274b)
+0040273e 51              push    ecx
+0040273f ff37            push    dword ptr [edi]
+00402741 ffd0            call    eax                                            ; g_LoadLibraryA("user32.dll")
+00402743 50              push    eax
+00402744 8b4604          mov     eax,dword ptr [esi+4]
+00402747 ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns USER32!CallWindowProcA
+00402749 eb02            jmp     image00400000+0x274d (0040274d)
+0040274b 33c0            xor     eax,eax
+0040274d 837e0400        cmp     dword ptr [esi+4],0
+00402751 898698010000    mov     dword ptr [esi+198h],eax                       ; g_CallWindowProcA = USER32!CallWindowProcA
+
+00402757 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+0040275c 8b4810          mov     ecx,dword ptr [eax+10h]                        ; g_obf_dta->obfus_SetWindowLongA
+0040275f 7415            je      image00400000+0x2776 (00402776)
+00402761 8b06            mov     eax,dword ptr [esi]
+00402763 85c0            test    eax,eax
+00402765 740f            je      image00400000+0x2776 (00402776)
+00402767 51              push    ecx
+00402768 ff37            push    dword ptr [edi]
+0040276a ffd0            call    eax                                            ; g_LoadLibraryA("user32.dll")
+0040276c 50              push    eax
+0040276d 8b4604          mov     eax,dword ptr [esi+4]
+00402770 ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns USER32!SetWindowLongA
+00402772 8bf8            mov     edi,eax                                        ; USER32!SetWindowLongA
+00402774 eb02            jmp     image00400000+0x2778 (00402778)
+00402776 33ff            xor     edi,edi
+
+00402778 8b45f0          mov     eax,dword ptr [ebp-10h]
+0040277b 85c0            test    eax,eax
+0040277d 7432            je      image00400000+0x27b1 (004027b1)
+0040277f 83be9801000000  cmp     dword ptr [esi+198h],0
+00402786 7429            je      image00400000+0x27b1 (004027b1)
+00402788 85ff            test    edi,edi
+0040278a 7425            je      image00400000+0x27b1 (004027b1)
+0040278c 6a00            push    0
+0040278e ff33            push    dword ptr [ebx]                                ; -> "EDIT"
+00402790 6a00            push    0
+00402792 ff7610          push    dword ptr [esi+10h]                            ; g_hwndDlg: parent window
+00402795 ffd0            call    eax                                            ; USER32!FindWindowExA(): find 1st stage edit window
+00402797 8b4df0          mov     ecx,dword ptr [ebp-10h]
+0040279a 6a00            push    0
+0040279c ff33            push    dword ptr [ebx]
+0040279e 50              push    eax
+0040279f ff7610          push    dword ptr [esi+10h]
+004027a2 ffd1            call    ecx                                            ; USER32!FindWindowExA(): fins 2nd stage  edit window
+004027a4 68f0284000      push    offset image00400000+0x28f0 (004028f0)
+004027a9 6afc            push    0FFFFFFFCh                                     ; GWL_WNDPROC
+004027ab 50              push    eax                                            ; ed2_wnd_proc
+004027ac ffd7            call    edi                                            ; prev_ed2_wnd_prc = USER32!SetWindowLongA(): set new window proc for 2nd stage edit
+004027ae 894614          mov     dword ptr [esi+14h],eax                        ; g_prev_ed2_wnd_prc = prev_ed2_wnd_prc
+
+finish:
+004027b1 8d45ec          lea     eax,[ebp-14h]
+004027b4 50              push    eax
+004027b5 e816f6ffff      call    image00400000+0x1dd0 (00401dd0)                ; free(b64_usr32)
+004027ba 8d45e8          lea     eax,[ebp-18h]
+004027bd 50              push    eax
+004027be e80df6ffff      call    image00400000+0x1dd0 (00401dd0)                ; free(b64_edit)
+004027c3 68887e4100      push    offset image00400000+0x17e88 (00417e88)
+004027c8 e803f6ffff      call    image00400000+0x1dd0 (00401dd0)                ; free(g_obf_dta)
+004027cd 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+004027d0 64890d00000000  mov     dword ptr fs:[0],ecx
+004027d7 59              pop     ecx
+004027d8 5f              pop     edi
+004027d9 5e              pop     esi
+004027da 5b              pop     ebx
+004027db 8be5            mov     esp,ebp
+004027dd 5d              pop     ebp
+004027de c3              ret
+
+;
+; ed2_wnd_proc(HWND hwndEd2, UINT uMsg, WPARAM wParam, LPARAM lParam)
+;
+; 2nd edit window proc works as following:
+; - The proc only handles WM_GETTEXT message, all other are passed to the original window proc
+; - For WM_GETTEXT the proc gets provided input and checks its correctness by calling xor_with_tab()
+;   (for the input and g_xor_tab table) and comparing the output with the correct password output
+;   of xor_with_tab().
+; - In case of correct password the proc disables the input controls and calls call_thread_in_remotemod().
+;
+; NOTE: There is a protection in the proc to avoid checking password via separate threads
+; in the same time, executing the window proc.
+;
+004028f0 55              push    ebp
+004028f1 8bec            mov     ebp,esp
+004028f3 81ec10010000    sub     esp,110h
+004028f9 a1b0404100      mov     eax,dword ptr [image00400000+0x140b0 (004140b0)]
+004028fe 33c5            xor     eax,ebp
+00402900 8945fc          mov     dword ptr [ebp-4],eax
+
+00402903 8b450c          mov     eax,dword ptr [ebp+0Ch]                        ; uMsg
+00402906 8b4d08          mov     ecx,dword ptr [ebp+8]                          ; hwndEd2
+00402909 53              push    ebx
+0040290a 56              push    esi
+0040290b 8b7514          mov     esi,dword ptr [ebp+14h]
+0040290e 57              push    edi
+
+0040290f 56              push    esi                                            ; arg: lParam
+00402910 ff7510          push    dword ptr [ebp+10h]                            ; arg: wParam
+00402913 83f80d          cmp     eax,0Dh
+00402916 7425            je      image00400000+0x293d (0040293d)
+00402918 50              push    eax                                            ; arg: uMsg
+00402919 a18c7e4100      mov     eax,dword ptr [image00400000+0x17e8c (00417e8c)]
+0040291e 51              push    ecx                                            ; arg: hwndEd2
+0040291f ff7014          push    dword ptr [eax+14h]                            ; arg: g_prev_ed2_wnd_prc
+00402922 8b8098010000    mov     eax,dword ptr [eax+198h]
+00402928 ffd0            call    eax                                            ; g_CallWindowProcA(): call the orginal wnd_proc
+0040292a 5f              pop     edi
+0040292b 5e              pop     esi
+0040292c 5b              pop     ebx
+0040292d 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00402930 33cd            xor     ecx,ebp
+00402932 e8701a0000      call    image00400000+0x43a7 (004043a7)
+00402937 8be5            mov     esp,ebp
+00402939 5d              pop     ebp
+0040293a c21000          ret     10h
+
+; WM_GETTEXT
+0040293d a18c7e4100      mov     eax,dword ptr [image00400000+0x17e8c (00417e8c)]
+00402942 6a0d            push    0Dh                                              ; arg: WM_GETTEXT
+00402944 51              push    ecx                                              ; arg: hwndEd2
+00402945 ff7014          push    dword ptr [eax+14h]                              ; arg: g_prev_ed2_wnd_prc
+00402948 8b8098010000    mov     eax,dword ptr [eax+198h]
+0040294e ffd0            call    eax                                              ; n_input = g_CallWindowProcA(): get text from the edit
+
+00402950 8b0d8c7e4100    mov     ecx,dword ptr [image00400000+0x17e8c (00417e8c)]
+00402956 6aff            push    0FFFFFFFFh
+00402958 ff710c          push    dword ptr [ecx+0Ch]                              ; g_event_obj
+0040295b 8985f4feffff    mov     dword ptr [ebp-10Ch],eax                         ; n_input
+
+; wait until previous password checking is finished in another WM_GETTEXT handling thread
+00402961 ff1544e04000    call    dword ptr [image00400000+0xe044 (0040e044)]      ; kernel32!WaitForSingleObject(g_event_obj, 0xFFFFFFFF)
+
+00402967 8bce            mov     ecx,esi                                          ; char *input = (char*)lParam
+00402969 8d5101          lea     edx,[ecx+1]
+0040296c 8d642400        lea     esp,[esp]
+00402970 8a01            mov     al,byte ptr [ecx]
+00402972 41              inc     ecx
+00402973 84c0            test    al,al
+00402975 75f9            jne     image00400000+0x2970 (00402970)
+00402977 2bca            sub     ecx,edx                                          ; n_input
+00402979 b880000000      mov     eax,80h
+0040297e 3bc8            cmp     ecx,eax
+00402980 0f47c8          cmova   ecx,eax                                          ; n_input = MAX(n_input, 0x80): input may be maximum 0x80 in length
+00402983 a18c7e4100      mov     eax,dword ptr [image00400000+0x17e8c (00417e8c)] ; g_glob_dta_sub
+00402988 51              push    ecx
+00402989 83c018          add     eax,18h                                          ; g_input
+0040298c 56              push    esi
+0040298d 50              push    eax
+0040298e e85d1d0000      call    image00400000+0x46f0 (004046f0)                  ; memcpy(g_input, input, n_input)
+00402993 83c40c          add     esp,0Ch
+00402996 b84cf43c00      mov     eax,3CF44Ch
+0040299b 0524230300      add     eax,32324h
+004029a0 50              push    eax
+004029a1 8f057c7e4100    pop     dword ptr [image00400000+0x17e7c (00417e7c)]     ; xor_with_tab() at addr 0x00401770
+004029a7 b8af033b00      mov     eax,3B03AFh
+004029ac 0565540600      add     eax,65465h
+004029b1 50              push    eax
+004029b2 8f85f0feffff    pop     dword ptr [ebp-110h]                             ; xored_pass at addr 0x00415814
+004029b8 b87ce4eb02      mov     eax,2EBE47Ch
+004029bd 8b158c7e4100    mov     edx,dword ptr [image00400000+0x17e8c (00417e8c)]
+004029c3 b940000000      mov     ecx,40h
+004029c8 be907e4100      mov     esi,offset image00400000+0x17e90 (00417e90)
+004029cd 8dbdf8feffff    lea     edi,[ebp-108h]                                   ; xor_tab_cpy
+004029d3 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+004029d5 83c218          add     edx,18h                                          ; g_input
+004029d8 8bc2            mov     eax,edx
+004029da 66a5            movs    word ptr es:[edi],word ptr [esi]                 ; memcpy(xor_tab_cpy, g_xor_tab, 0x102)
+004029dc 8d7001          lea     esi,[eax+1]
+004029df 90              nop
+004029e0 8a08            mov     cl,byte ptr [eax]
+004029e2 40              inc     eax
+004029e3 84c9            test    cl,cl
+004029e5 75f9            jne     image00400000+0x29e0 (004029e0)
+004029e7 8d8df8feffff    lea     ecx,[ebp-108h]
+004029ed 51              push    ecx
+004029ee 2bc6            sub     eax,esi                                          ; n_input
+004029f0 50              push    eax
+004029f1 52              push    edx
+004029f2 ff157c7e4100    call    dword ptr [image00400000+0x17e7c (00417e7c)]     ; xor_with_tab(g_input, n_input, xor_tab_cpy)
+004029f8 83c40c          add     esp,0Ch
+004029fb bbf40cad90      mov     ebx,90AD0CF4h
+00402a00 81c3204b946f    add     ebx,6F944B20h
+00402a06 891d747e4100    mov     dword ptr [image00400000+0x17e74 (00417e74)],ebx ; xored_pass
+00402a0c 8b3d8c7e4100    mov     edi,dword ptr [image00400000+0x17e8c (00417e8c)]
+00402a12 8b0d747e4100    mov     ecx,dword ptr [image00400000+0x17e74 (00417e74)]
+00402a18 8d5718          lea     edx,[edi+18h]                                    ; g_input
+00402a1b be0c000000      mov     esi,0Ch                                          ; cmp length = 0x10
+00402a20 8b01            mov     eax,dword ptr [ecx]
+00402a22 3b02            cmp     eax,dword ptr [edx]
+00402a24 752f            jne     image00400000+0x2a55 (00402a55)                  ; if (!memcmp(g_input, xored_pass, 0x10)) goto pass_bad
+00402a26 83c104          add     ecx,4
+00402a29 83c204          add     edx,4
+00402a2c 83ee04          sub     esi,4
+00402a2f 73ef            jae     image00400000+0x2a20 (00402a20)
+; password is fine
+00402a31 56              push    esi
+00402a32 bec6664600      mov     esi,4666C6h
+00402a37 81ee76540600    sub     esi,65476h
+00402a3d 8935787e4100    mov     dword ptr [image00400000+0x17e78 (00417e78)],esi ; disable_controls() at addr 0x00401250
+00402a43 5e              pop     esi
+00402a44 ff15787e4100    call    dword ptr [image00400000+0x17e78 (00417e78)]     ; disable_controls()
+00402a4a e831000000      call    image00400000+0x2a80 (00402a80)                  ; call_thread_in_remotemod()
+00402a4f 8b3d8c7e4100    mov     edi,dword ptr [image00400000+0x17e8c (00417e8c)]
+pass_bad:
+00402a55 ff770c          push    dword ptr [edi+0Ch]                              ; g_event_obj
+00402a58 ff1548e04000    call    dword ptr [image00400000+0xe048 (0040e048)]      ; kernel32!SetEvent(g_event_obj): set g_event_obj as signalled, the wnd_proc can handle subsequent WM_GETTEXT event
+00402a5e 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00402a61 8b85f4feffff    mov     eax,dword ptr [ebp-10Ch]
+00402a67 5f              pop     edi
+00402a68 5e              pop     esi
+00402a69 33cd            xor     ecx,ebp
+00402a6b 5b              pop     ebx
+00402a6c e836190000      call    image00400000+0x43a7 (004043a7)
+00402a71 8be5            mov     esp,ebp
+00402a73 5d              pop     ebp
+00402a74 c21000          ret     10h
+
+;
+; xor_with_tab(byte in[], dword in_len, byte tab[])
+;
+; Basically this proc xors in[] with tab[], while the tab[] is modified during
+; the process in a complicated way. Nonetheless the result of the func is equal to:
+; out[] = in[] ^ xor_with_tab(zeros[], 0x100, tab),
+; where the out[] is truncated to the in[] length. This gives an easy method to
+; reverse this proc.
+;
+00401770 55              push    ebp
+00401771 8bec            mov     ebp,esp
+00401773 8b4510          mov     eax,dword ptr [ebp+10h]                        ; tab
+00401776 83ec0c          sub     esp,0Ch
+00401779 8a8800010000    mov     cl,byte ptr [eax+100h]                         ; s = tab[0x100]
+0040177f 8a9001010000    mov     dl,byte ptr [eax+101h]                         ; d = tab[0x101]
+00401785 56              push    esi
+00401786 57              push    edi
+00401787 8b7d0c          mov     edi,dword ptr [ebp+0Ch]
+0040178a 33f6            xor     esi,esi
+0040178c 85ff            test    edi,edi
+0040178e 0f8eaa000000    jle     image00400000+0x183e (0040183e)                ; if (in_len<=0) nothing to do
+00401794 0fb6d2          movzx   edx,dl
+00401797 0fb6c9          movzx   ecx,cl
+0040179a 895510          mov     dword ptr [ebp+10h],edx                        ; d
+0040179d 8975f8          mov     dword ptr [ebp-8],esi                          ; i=0
+004017a0 53              push    ebx
+calc_loop:
+004017a1 41              inc     ecx
+004017a2 81e1ff000080    and     ecx,800000FFh
+004017a8 7908            jns     image00400000+0x17b2 (004017b2)
+004017aa 49              dec     ecx
+004017ab 81c900ffffff    or      ecx,0FFFFFF00h
+004017b1 41              inc     ecx
+004017b2 894df4          mov     dword ptr [ebp-0Ch],ecx
+004017b5 0fb6c9          movzx   ecx,cl
+004017b8 894dfc          mov     dword ptr [ebp-4],ecx                          ; s=s+1
+004017bb 8a1401          mov     dl,byte ptr [ecx+eax]
+004017be 0fb6da          movzx   ebx,dl
+004017c1 035d10          add     ebx,dword ptr [ebp+10h]
+004017c4 81e3ff000080    and     ebx,800000FFh
+004017ca 7908            jns     image00400000+0x17d4 (004017d4)
+004017cc 4b              dec     ebx
+004017cd 81cb00ffffff    or      ebx,0FFFFFF00h
+004017d3 43              inc     ebx
+004017d4 8b7dfc          mov     edi,dword ptr [ebp-4]
+004017d7 0fb6cb          movzx   ecx,bl
+004017da 894d10          mov     dword ptr [ebp+10h],ecx                        ; d=d+tab[s]
+004017dd 0fb60c01        movzx   ecx,byte ptr [ecx+eax]
+; xchng(tab[s], tab[d])
+004017e1 880c07          mov     byte ptr [edi+eax],cl                          ; tab[s]=tab[d]
+004017e4 8b4d10          mov     ecx,dword ptr [ebp+10h]
+004017e7 881401          mov     byte ptr [ecx+eax],dl                          ; tab[d]=prev(tab[s])
+
+004017ea 8bcf            mov     ecx,edi
+004017ec 0fb6d2          movzx   edx,dl
+004017ef 0fb60c01        movzx   ecx,byte ptr [ecx+eax]
+004017f3 03d1            add     edx,ecx
+004017f5 81e2ff000080    and     edx,800000FFh
+004017fb 7908            jns     image00400000+0x1805 (00401805)
+004017fd 4a              dec     edx
+004017fe 81ca00ffffff    or      edx,0FFFFFF00h
+00401804 42              inc     edx
+00401805 8b7d08          mov     edi,dword ptr [ebp+8]                          ; in
+00401808 0fb6ca          movzx   ecx,dl                                         ; tab[s]+tab[d]
+0040180b 8b55f8          mov     edx,dword ptr [ebp-8]
+0040180e 0fb60c01        movzx   ecx,byte ptr [ecx+eax]
+00401812 300c3a          xor     byte ptr [edx+edi],cl                          ; in[i] ^= tab[tab[s]+tab[d]]
+00401815 46              inc     esi
+00401816 0fbfce          movsx   ecx,si
+00401819 3b4d0c          cmp     ecx,dword ptr [ebp+0Ch]
+0040181c 894df8          mov     dword ptr [ebp-8],ecx
+0040181f 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00401822 0f8c79ffffff    jl      image00400000+0x17a1 (004017a1)                ; if (++i < in_len) goto calc_loop
+00401828 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+0040182b 889801010000    mov     byte ptr [eax+101h],bl                         ; tab[0x101] = d
+00401831 5b              pop     ebx
+00401832 5f              pop     edi
+00401833 888800010000    mov     byte ptr [eax+100h],cl                         ; tab[0x100] = s
+00401839 5e              pop     esi
+0040183a 8be5            mov     esp,ebp
+0040183c 5d              pop     ebp
+0040183d c3              ret
+0040183e 5f              pop     edi
+0040183f 889001010000    mov     byte ptr [eax+101h],dl
+00401845 888800010000    mov     byte ptr [eax+100h],cl
+0040184b 5e              pop     esi
+0040184c 8be5            mov     esp,ebp
+0040184e 5d              pop     ebp
+0040184f c3              ret
+
+;
+; call_thread_in_remotemod()
+; Creates the process SYSTEM_DIR\userinit.exe (remote module) and runs remote
+; thread within it as the last stage of the crackme.
+;
+00402a80 55              push    ebp
+00402a81 8bec            mov     ebp,esp
+00402a83 6aff            push    0FFFFFFFFh
+00402a85 68a1d14000      push    offset image00400000+0xd1a1 (0040d1a1)
+00402a8a 64a100000000    mov     eax,dword ptr fs:[00000000h]
+00402a90 50              push    eax
+00402a91 83ec24          sub     esp,24h
+00402a94 53              push    ebx
+00402a95 56              push    esi
+00402a96 57              push    edi
+00402a97 a1b0404100      mov     eax,dword ptr [image00400000+0x140b0 (004140b0)]
+00402a9c 33c5            xor     eax,ebp
+00402a9e 50              push    eax
+00402a9f 8d45f4          lea     eax,[ebp-0Ch]
+00402aa2 64a300000000    mov     dword ptr fs:[00000000h],eax
+00402aa8 8b358c7e4100    mov     esi,dword ptr [image00400000+0x17e8c (00417e8c)]   ; g_glob_dta_sub
+00402aae 807e0800        cmp     byte ptr [esi+8],0
+00402ab2 0f85f8020000    jne     image00400000+0x2db0 (00402db0)                ; if (g_remotemod_called) goto finish: the proc called only once
+00402ab8 68887e4100      push    offset image00400000+0x17e88 (00417e88)
+00402abd c6460801        mov     byte ptr [esi+8],1                             ; g_remotemod_called=TRUE
+00402ac1 e80af3ffff      call    image00400000+0x1dd0 (00401dd0)                ; free(g_obf_dta): free current g_obf_dta to create a new one
+00402ac6 6a7c            push    7Ch
+00402ac8 c745d800000000  mov     dword ptr [ebp-28h],0
+00402acf e89a1b0000      call    image00400000+0x466e (0040466e)                ; obf_dta = malloc(0x7c)
+00402ad4 83c404          add     esp,4
+00402ad7 85c0            test    eax,eax
+00402ad9 7409            je      image00400000+0x2ae4 (00402ae4)
+00402adb 8bc8            mov     ecx,eax
+00402add e84e160000      call    image00400000+0x4130 (00404130)                ; initialize obf_dta exactly tha same way as in init_ed2()
+00402ae2 eb02            jmp     image00400000+0x2ae6 (00402ae6)
+00402ae4 33c0            xor     eax,eax
+00402ae6 a3887e4100      mov     dword ptr [image00400000+0x17e88 (00417e88)],eax   ; g_obf_dta = obf_dta
+00402aeb 85c0            test    eax,eax
+00402aed 0f84a1020000    je      image00400000+0x2d94 (00402d94)                ; no memory -> goto finish2
+00402af3 6a08            push    8
+00402af5 e8741b0000      call    image00400000+0x466e (0040466e)                ; malloc(8): alloc b64 buf
+00402afa 83c404          add     esp,4
+00402afd 8945d4          mov     dword ptr [ebp-2Ch],eax
+00402b00 c745fc00000000  mov     dword ptr [ebp-4],0
+00402b07 85c0            test    eax,eax
+00402b09 7414            je      image00400000+0x2b1f (00402b1f)
+00402b0b 8b0d887e4100    mov     ecx,dword ptr [image00400000+0x17e88 (00417e88)]
+00402b11 ff7118          push    dword ptr [ecx+18h]                            ; g_obf_dta->b64_kernel32
+00402b14 8bc8            mov     ecx,eax
+00402b16 e895150000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "kernel32"
+00402b1b 8bf8            mov     edi,eax
+00402b1d eb02            jmp     image00400000+0x2b21 (00402b21)
+00402b1f 33ff            xor     edi,edi
+00402b21 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402b28 897dd4          mov     dword ptr [ebp-2Ch],edi
+00402b2b 85ff            test    edi,edi
+00402b2d 0f8461020000    je      image00400000+0x2d94 (00402d94)                ; no memory -> goto finish2
+00402b33 6a08            push    8
+00402b35 e8341b0000      call    image00400000+0x466e (0040466e)                ; malloc(8): alloc b64 buf
+00402b3a 83c404          add     esp,4
+00402b3d 8945d8          mov     dword ptr [ebp-28h],eax
+00402b40 c745fc01000000  mov     dword ptr [ebp-4],1
+00402b47 85c0            test    eax,eax
+00402b49 7414            je      image00400000+0x2b5f (00402b5f)
+00402b4b 8b0d887e4100    mov     ecx,dword ptr [image00400000+0x17e88 (00417e88)]
+00402b51 ff711c          push    dword ptr [ecx+1Ch]                            ; g_obf_dta->b64_remotemod
+00402b54 8bc8            mov     ecx,eax
+00402b56 e855150000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "\userinit.exe"
+00402b5b 8bd8            mov     ebx,eax
+00402b5d eb02            jmp     image00400000+0x2b61 (00402b61)
+00402b5f 33db            xor     ebx,ebx
+00402b61 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402b68 895dd8          mov     dword ptr [ebp-28h],ebx
+00402b6b 85db            test    ebx,ebx
+00402b6d 0f8421020000    je      image00400000+0x2d94 (00402d94)                ; no memory -> finish2
+00402b73 837e0400        cmp     dword ptr [esi+4],0                            ; is g_get_proc_addr_obfus present?
+00402b77 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402b7c 8b5014          mov     edx,dword ptr [eax+14h]                        ; g_obf_dta->obfus_GetSystemDirectoryA
+00402b7f 741b            je      image00400000+0x2b9c (00402b9c)
+00402b81 8b0e            mov     ecx,dword ptr [esi]
+00402b83 85c9            test    ecx,ecx
+00402b85 7415            je      image00400000+0x2b9c (00402b9c)                ; is g_LoadLibraryA present?
+00402b87 52              push    edx
+00402b88 ff37            push    dword ptr [edi]
+00402b8a ffd1            call    ecx                                            ; g_LoadLibraryA("kernel32.dll")
+00402b8c 50              push    eax
+00402b8d 8b4604          mov     eax,dword ptr [esi+4]
+00402b90 ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns kernel32!GetSystemDirectoryA
+00402b92 8945e4          mov     dword ptr [ebp-1Ch],eax                        ; kernel32!GetSystemDirectoryA
+00402b95 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402b9a eb07            jmp     image00400000+0x2ba3 (00402ba3)
+00402b9c c745e400000000  mov     dword ptr [ebp-1Ch],0
+00402ba3 837e0400        cmp     dword ptr [esi+4],0
+00402ba7 8b5020          mov     edx,dword ptr [eax+20h]                        ; g_obf_dta->obfus_CreateProcessA
+00402baa 741b            je      image00400000+0x2bc7 (00402bc7)
+00402bac 8b0e            mov     ecx,dword ptr [esi]
+00402bae 85c9            test    ecx,ecx
+00402bb0 7415            je      image00400000+0x2bc7 (00402bc7)
+00402bb2 52              push    edx
+00402bb3 ff37            push    dword ptr [edi]
+00402bb5 ffd1            call    ecx
+00402bb7 50              push    eax
+00402bb8 8b4604          mov     eax,dword ptr [esi+4]
+00402bbb ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns kernel32!CreateProcessA
+00402bbd 8945f0          mov     dword ptr [ebp-10h],eax                        ; kernel32!CreateProcessA
+00402bc0 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402bc5 eb07            jmp     image00400000+0x2bce (00402bce)
+00402bc7 c745f000000000  mov     dword ptr [ebp-10h],0
+00402bce 837e0400        cmp     dword ptr [esi+4],0
+00402bd2 8b5024          mov     edx,dword ptr [eax+24h]                        ; g_obf_dta->obfus_VirtualAllocEx
+00402bd5 741b            je      image00400000+0x2bf2 (00402bf2)
+00402bd7 8b0e            mov     ecx,dword ptr [esi]
+00402bd9 85c9            test    ecx,ecx
+00402bdb 7415            je      image00400000+0x2bf2 (00402bf2)
+00402bdd 52              push    edx
+00402bde ff37            push    dword ptr [edi]
+00402be0 ffd1            call    ecx
+00402be2 50              push    eax
+00402be3 8b4604          mov     eax,dword ptr [esi+4]
+00402be6 ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns kernel32!VirtualAllocEx
+00402be8 8945ec          mov     dword ptr [ebp-14h],eax                        ; kernel32!VirtualAllocEx
+00402beb a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402bf0 eb07            jmp     image00400000+0x2bf9 (00402bf9)
+00402bf2 c745ec00000000  mov     dword ptr [ebp-14h],0
+00402bf9 837e0400        cmp     dword ptr [esi+4],0
+00402bfd 8b5028          mov     edx,dword ptr [eax+28h]                        ; g_obf_dta->obfus_WriteProcessMemory
+00402c00 741b            je      image00400000+0x2c1d (00402c1d)
+00402c02 8b0e            mov     ecx,dword ptr [esi]
+00402c04 85c9            test    ecx,ecx
+00402c06 7415            je      image00400000+0x2c1d (00402c1d)
+00402c08 52              push    edx
+00402c09 ff37            push    dword ptr [edi]
+00402c0b ffd1            call    ecx
+00402c0d 50              push    eax
+00402c0e 8b4604          mov     eax,dword ptr [esi+4]
+00402c11 ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns kernel32!WriteProcessMemory
+00402c13 8945e8          mov     dword ptr [ebp-18h],eax                        ; kernel32!WriteProcessMemory
+00402c16 a1887e4100      mov     eax,dword ptr [image00400000+0x17e88 (00417e88)]
+00402c1b eb07            jmp     image00400000+0x2c24 (00402c24)
+00402c1d c745e800000000  mov     dword ptr [ebp-18h],0
+00402c24 837e0400        cmp     dword ptr [esi+4],0
+00402c28 8b482c          mov     ecx,dword ptr [eax+2Ch]                        ; g_obf_dta->CreateRemoteThread
+00402c2b 7418            je      image00400000+0x2c45 (00402c45)
+00402c2d 8b06            mov     eax,dword ptr [esi]
+00402c2f 85c0            test    eax,eax
+00402c31 7412            je      image00400000+0x2c45 (00402c45)
+00402c33 51              push    ecx
+00402c34 ff37            push    dword ptr [edi]
+00402c36 ffd0            call    eax
+00402c38 50              push    eax
+00402c39 8b4604          mov     eax,dword ptr [esi+4]
+00402c3c ffd0            call    eax                                            ; g_get_proc_addr_obfus(): returns kernel32!CreateRemoteThread
+00402c3e 8bf8            mov     edi,eax                                        ; kernel32!CreateRemoteThread
+00402c40 8945dc          mov     dword ptr [ebp-24h],eax                        ; kernel32!CreateRemoteThread
+00402c43 eb05            jmp     image00400000+0x2c4a (00402c4a)
+00402c45 33ff            xor     edi,edi
+00402c47 897ddc          mov     dword ptr [ebp-24h],edi
+00402c4a 6804090000      push    904h
+00402c4f e81a1a0000      call    image00400000+0x466e (0040466e)                ; remote_args = malloc(0x904)
+00402c54 83c404          add     esp,4
+00402c57 8945e0          mov     dword ptr [ebp-20h],eax
+00402c5a c745fc02000000  mov     dword ptr [ebp-4],2
+00402c61 85c0            test    eax,eax
+00402c63 740c            je      image00400000+0x2c71 (00402c71)
+00402c65 8bc8            mov     ecx,eax
+00402c67 e8b4f3ffff      call    image00400000+0x2020 (00402020)                ; remote_args_init(ecx:remote_args)
+00402c6c 8945e0          mov     dword ptr [ebp-20h],eax
+00402c6f eb07            jmp     image00400000+0x2c78 (00402c78)
+00402c71 c745e000000000  mov     dword ptr [ebp-20h],0
+; check if all exports have been found
+00402c78 8b45e4          mov     eax,dword ptr [ebp-1Ch]
+00402c7b c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402c82 85c0            test    eax,eax
+00402c84 0f840a010000    je      image00400000+0x2d94 (00402d94)                ; no kernel32!GetSystemDirectoryA -> goto finish2
+00402c8a 837dec00        cmp     dword ptr [ebp-14h],0
+00402c8e 0f8400010000    je      image00400000+0x2d94 (00402d94)                ; no kernel32!VirtualAllocEx -> goto finish2
+00402c94 837de800        cmp     dword ptr [ebp-18h],0
+00402c98 0f84f6000000    je      image00400000+0x2d94 (00402d94)                ; no kernel32!WriteProcessMemory -> goto finish2
+00402c9e 837df000        cmp     dword ptr [ebp-10h],0
+00402ca2 0f84ec000000    je      image00400000+0x2d94 (00402d94)                ; no kernel32!CreateProcessA -> goto finish2
+00402ca8 85ff            test    edi,edi
+00402caa 0f84e4000000    je      image00400000+0x2d94 (00402d94)                ; no kernel32!CreateRemoteThread -> goto finish2
+00402cb0 81c698000000    add     esi,98h
+00402cb6 6800010000      push    100h
+00402cbb 56              push    esi
+00402cbc 8975e4          mov     dword ptr [ebp-1Ch],esi                        ; g_remotemod_full_name
+00402cbf ffd0            call    eax                                            ; kernel32!GetSystemDirectoryA(g_remotemod_full_name, 0x100)
+00402cc1 8b13            mov     edx,dword ptr [ebx]                            ; remotemod[]: remote module name ("\userinit.exe")
+00402cc3 8bda            mov     ebx,edx
+00402cc5 8a02            mov     al,byte ptr [edx]
+00402cc7 42              inc     edx
+00402cc8 84c0            test    al,al
+00402cca 75f9            jne     image00400000+0x2cc5 (00402cc5)
+00402ccc 2bd3            sub     edx,ebx                                        ; strlen(remotemod)+1
+00402cce 8d7eff          lea     edi,[esi-1]
+00402cd1 8a4701          mov     al,byte ptr [edi+1]
+00402cd4 47              inc     edi
+00402cd5 84c0            test    al,al
+00402cd7 75f8            jne     image00400000+0x2cd1 (00402cd1)
+; edi points end of string of g_remotemod_full_name
+00402cd9 68207e4100      push    offset image00400000+0x17e20 (00417e20)        ; arg: &processInformation
+00402cde 68307e4100      push    offset image00400000+0x17e30 (00417e30)        ; arg: &startupInfo (all emebers are NULL)
+00402ce3 6a00            push    0                                              ; arg: lpCurrentDirectory==NULL
+00402ce5 8bca            mov     ecx,edx
+00402ce7 c1e902          shr     ecx,2
+00402cea 6a00            push    0                                              ; arg: lpEnvironment==NULL
+00402cec 6a04            push    4                                              ; arg: dwCreationFlags==CREATE_SUSPENDED
+00402cee 8bf3            mov     esi,ebx
+00402cf0 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+00402cf2 6a00            push    0                                              ; arg: bInheritHandles=FALSE
+00402cf4 6a00            push    0                                              ; arg: lpThreadAttributes==NULL
+00402cf6 6a00            push    0                                              ; arg: lpProcessAttributes==NULL
+00402cf8 8bca            mov     ecx,edx
+00402cfa 6a00            push    0                                              ; arg: lpCommandLine==NULL
+00402cfc ff75e4          push    dword ptr [ebp-1Ch]                            ; arg: g_remotemod_full_name
+00402cff 83e103          and     ecx,3
+00402d02 f3a4            rep movs byte ptr es:[edi],byte ptr [esi]              ; strcat(g_remotemod_full_name, remotemod)
+00402d04 ff55f0          call    dword ptr [ebp-10h]                            ; kernel32!CreateProcessA(): create process of the remote module
+00402d07 85c0            test    eax,eax
+00402d09 0f8485000000    je      image00400000+0x2d94 (00402d94)                ; API error -> goto finish2
+00402d0f 8b7dec          mov     edi,dword ptr [ebp-14h]
+00402d12 6a04            push    4                                              ; arg: PAGE_READWRITE
+00402d14 6800100000      push    1000h                                          ; arg: MEM_COMMIT
+00402d19 6804090000      push    904h                                           ; arg: dwSize==sizeof(remote_args)
+00402d1e 6a00            push    0                                              ; arg: lpAddress==NULL
+00402d20 ff35207e4100    push    dword ptr [image00400000+0x17e20 (00417e20)]   ; arg: processInformation->hProcess
+00402d26 ffd7            call    edi                                            ; remote_args_addr = kernel32!VirtualAllocEx(): allocate remote data in the remote module
+00402d28 8bf0            mov     esi,eax
+00402d2a 85f6            test    esi,esi
+00402d2c 7466            je      image00400000+0x2d94 (00402d94)                ; API error -> finish2
+00402d2e 8b5de8          mov     ebx,dword ptr [ebp-18h]
+00402d31 6a00            push    0                                              ; arg: lpNumberOfBytesWritten==NULL
+00402d33 6804090000      push    904h                                           ; arg: nSize==sizeof(remote_args)
+00402d38 ff75e0          push    dword ptr [ebp-20h]                            ; arg: lpBuffer==remote_args
+00402d3b 56              push    esi                                            ; arg: lpBaseAddress==remote_args_addr
+00402d3c ff35207e4100    push    dword ptr [image00400000+0x17e20 (00417e20)]   ; arg: processInformation->hProcess
+00402d42 ffd3            call    ebx                                            ; kernel32!WriteProcessMemory(): copy remote_args[] into the remote_args_addr
+00402d44 85c0            test    eax,eax
+00402d46 744c            je      image00400000+0x2d94 (00402d94)                ; API error -> finish2
+00402d48 6a40            push    40h                                            ; arg: PAGE_EXECUTE_READWRITE
+00402d4a 6800100000      push    1000h                                          ; arg: MEM_COMMIT
+00402d4f ff35487c4100    push    dword ptr [image00400000+0x17c48 (00417c48)]   ; arg: dwSize==g_remote_code_size
+00402d55 6a00            push    0                                              ; arg: lpAddress==NULL
+00402d57 ff35207e4100    push    dword ptr [image00400000+0x17e20 (00417e20)]   ; arg: processInformation->hProcess
+00402d5d ffd7            call    edi                                            ; remote_code_addr = kernel32!VirtualAllocEx(): allocate remote code in the remote module
+00402d5f 8bf8            mov     edi,eax
+00402d61 85ff            test    edi,edi
+00402d63 742f            je      image00400000+0x2d94 (00402d94)                ; API error -> finish2
+00402d65 6a00            push    0                                              ; arg: lpNumberOfBytesWritten==NULL
+00402d67 ff35487c4100    push    dword ptr [image00400000+0x17c48 (00417c48)]   ; arg: nSize==g_remote_code_size (0x440)
+00402d6d 6820144000      push    offset image00400000+0x1420 (00401420)         ; arg: lpBuffer==remote_thread (at addr 0x00401420)
+; remote code may be dumped here:
+; .writemem remote.bin dwo(@esp) Ldwo(@esp+4)
+00402d72 57              push    edi                                            ; arg: lpBaseAddress==remote_code_addr
+00402d73 ff35207e4100    push    dword ptr [image00400000+0x17e20 (00417e20)]   ; arg: processInformation->hProcess
+00402d79 ffd3            call    ebx                                            ; kernel32!WriteProcessMemory(): copy remote code staring from remote_thread
+00402d7b 85c0            test    eax,eax
+00402d7d 7415            je      image00400000+0x2d94 (00402d94)                ; API error -> finish2
+00402d7f 8d45d0          lea     eax,[ebp-30h]                                  ; threadId
+00402d82 50              push    eax                                            ; arg: &threadId
+00402d83 6a00            push    0                                              ; arg: dwCreationFlags==0
+00402d85 56              push    esi                                            ; arg: lpParameter==remote_args_addr
+00402d86 57              push    edi                                            ; arg: lpStartAddress==remote_thread
+00402d87 6a00            push    0                                              ; arg: dwStackSize==0
+00402d89 6a00            push    0                                              ; arg: lpThreadAttributes==NULL
+00402d8b ff35207e4100    push    dword ptr [image00400000+0x17e20 (00417e20)]   ; arg: processInformation->hProcess
+00402d91 ff55dc          call    dword ptr [ebp-24h]                            ; kernel32!CreateRemoteThread()
+finish2:
+00402d94 68887e4100      push    offset image00400000+0x17e88 (00417e88)
+00402d99 e832f0ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+00402d9e 8d45d4          lea     eax,[ebp-2Ch]
+00402da1 50              push    eax
+00402da2 e829f0ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+00402da7 8d45d8          lea     eax,[ebp-28h]
+00402daa 50              push    eax
+00402dab e820f0ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+finish:
+00402db0 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+00402db3 64890d00000000  mov     dword ptr fs:[0],ecx
+00402dba 59              pop     ecx
+00402dbb 5f              pop     edi
+00402dbc 5e              pop     esi
+00402dbd 5b              pop     ebx
+00402dbe 8be5            mov     esp,ebp
+00402dc0 5d              pop     ebp
+00402dc1 c3              ret

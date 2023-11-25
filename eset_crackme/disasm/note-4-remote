@@ -1,0 +1,839 @@
+struct remote_args
+{
+  dword LoadLibraryA           // off:0x0000; not used by the remote call
+  dword get_proc_addr_obfus    // off:0x0004; not used by the remote call (event can not to be used - the proc is outside of the remote module's process space)
+  word  http_port              // off:0x0018; set to 0x0050 (80 - standard HTTP port)
+  byte  str_http_host[]        // off:0x001a
+  byte  str_url[]              // off:0x0119
+  dword MessageBoxA,           // off:0x0224
+  dword InternetOpenA,         // off:0x0228
+  dword LoadLibraryA,          // off:0x022c
+  dword InternetConnectA,      // off:0x0230
+  dword HttpOpenRequestA,      // off:0x0234
+  dword HttpSendRequestA,      // off:0x0238
+  dword InternetReadFile,      // off:0x023c
+  dword InternetCloseHandle,   // off:0x0240
+  dword ExitProcess,           // off:0x0244
+  byte  str_end[]              // off:0x054E
+  byte  str_agent[]            // off:0x05ce
+  byte  str_cont_tpy[]         // off:0x064e
+  byte  str_key_val[]          // off:0x06ce; "key=" + g_key_val[]
+  byte  str_http_method[]      // off:0x074e
+  byte  str_xored_pass[]       // off:0x078e
+  byte  str_key_val_only[]     // off:0x07ee; g_key_val only
+  byte  str_wininet[]          // off:0x080e
+  byte  xored_congrats[]       // off:0x082E; xor'ed congrats string (copied from 00415c14 - .inside .data sect of the final module)
+  dword xored_congrats_len     // off:0x0900; set to 0x20
+}
+
+xored_congrats:
+  00415c14 35 31 fa c8 85 80 24 87 9b 45 a2 ca de b5 9d 0a 77 46 5b 5b 99 7a 63 d3 e7 4e e3 99 42 99 fe 4e
+
+;
+; remote_args_init(ecx:remote_args)
+; Initialized remote_args struct acting as remote thread's args (run in the remote module).
+;
+00402020 55              push    ebp
+00402021 8bec            mov     ebp,esp
+00402023 6aff            push    0FFFFFFFFh
+00402025 685ed14000      push    offset image00400000+0xd15e (0040d15e)
+0040202a 64a100000000    mov     eax,dword ptr fs:[00000000h]
+00402030 50              push    eax
+00402031 83ec48          sub     esp,48h
+00402034 53              push    ebx
+00402035 56              push    esi
+00402036 57              push    edi
+00402037 a1b0404100      mov     eax,dword ptr [image00400000+0x140b0 (004140b0)]
+0040203c 33c5            xor     eax,ebp
+0040203e 50              push    eax
+0040203f 8d45f4          lea     eax,[ebp-0Ch]
+00402042 64a300000000    mov     dword ptr fs:[00000000h],eax
+00402048 8bf1            mov     esi,ecx                                        ; remote_args
+0040204a 8975d0          mov     dword ptr [ebp-30h],esi                        ; remote_args
+0040204d c7460400000000  mov     dword ptr [esi+4],0
+00402054 c70600000000    mov     dword ptr [esi],0
+0040205a b81ddb1e21      mov     eax,211EDB1Dh
+0040205f 6a7c            push    7Ch
+00402061 e808260000      call    image00400000+0x466e (0040466e)                ; obf_dta = malloc(0x7c) of type obfus_data
+00402066 8bd8            mov     ebx,eax
+00402068 83c404          add     esp,4
+0040206b 85db            test    ebx,ebx
+0040206d 7455            je      image00400000+0x20c4 (004020c4)
+; init part of obf_dta as in init_ed2()
+0040206f c703286d4100    mov     dword ptr [ebx],offset image00400000+0x16d28 (00416d28)
+00402075 c7430424264100  mov     dword ptr [ebx+4],offset image00400000+0x12624 (00412624)
+0040207c c7430830264100  mov     dword ptr [ebx+8],offset image00400000+0x12630 (00412630)
+00402083 c7430c146d4100  mov     dword ptr [ebx+0Ch],offset image00400000+0x16d14 (00416d14)
+0040208a c74310006d4100  mov     dword ptr [ebx+10h],offset image00400000+0x16d00 (00416d00)
+00402091 c74314ec6c4100  mov     dword ptr [ebx+14h],offset image00400000+0x16cec (00416cec)
+00402098 c7431844264100  mov     dword ptr [ebx+18h],offset image00400000+0x12644 (00412644)
+0040209f c7431c58264100  mov     dword ptr [ebx+1Ch],offset image00400000+0x12658 (00412658)
+004020a6 c74320d86c4100  mov     dword ptr [ebx+20h],offset image00400000+0x16cd8 (00416cd8)
+004020ad c74324c46c4100  mov     dword ptr [ebx+24h],offset image00400000+0x16cc4 (00416cc4)
+004020b4 c74328b06c4100  mov     dword ptr [ebx+28h],offset image00400000+0x16cb0 (00416cb0)
+004020bb c7432c9c6c4100  mov     dword ptr [ebx+2Ch],offset image00400000+0x16c9c (00416c9c)
+004020c2 eb02            jmp     image00400000+0x20c6 (004020c6)
+004020c4 33db            xor     ebx,ebx
+004020c6 895dcc          mov     dword ptr [ebp-34h],ebx                        ; obf_dta
+004020c9 85db            test    ebx,ebx
+004020cb 0f84f4040000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+004020d1 8bcb            mov     ecx,ebx
+004020d3 e8b8200000      call    image00400000+0x4190 (00404190)                ; init_obfus_data_for_remote(ecx:obf_dta)
+004020d8 6a08            push    8
+004020da e88f250000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+004020df 83c404          add     esp,4
+004020e2 8945ac          mov     dword ptr [ebp-54h],eax
+004020e5 c745fc00000000  mov     dword ptr [ebp-4],0
+004020ec 85c0            test    eax,eax
+004020ee 740c            je      image00400000+0x20fc (004020fc)
+004020f0 ff7334          push    dword ptr [ebx+34h]                            ; obf_dta->b64_End
+004020f3 8bc8            mov     ecx,eax
+004020f5 e8b61f0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "THE END."
+004020fa eb02            jmp     image00400000+0x20fe (004020fe)
+004020fc 33c0            xor     eax,eax
+004020fe c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402105 8945d4          mov     dword ptr [ebp-2Ch],eax
+00402108 8945c0          mov     dword ptr [ebp-40h],eax
+0040210b 85c0            test    eax,eax
+0040210d 0f84b2040000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+00402113 6a08            push    8
+00402115 e854250000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+0040211a 83c404          add     esp,4
+0040211d 8945ac          mov     dword ptr [ebp-54h],eax
+00402120 c745fc01000000  mov     dword ptr [ebp-4],1
+00402127 85c0            test    eax,eax
+00402129 740e            je      image00400000+0x2139 (00402139)
+0040212b ff7338          push    dword ptr [ebx+38h]                            ; obf_dta->b64_http_host
+0040212e 8bc8            mov     ecx,eax
+00402130 e87b1f0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "localhost"
+00402135 8bf8            mov     edi,eax
+00402137 eb02            jmp     image00400000+0x213b (0040213b)
+00402139 33ff            xor     edi,edi
+0040213b c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402142 897dc8          mov     dword ptr [ebp-38h],edi
+00402145 85ff            test    edi,edi
+00402147 0f8478040000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+0040214d 6a08            push    8
+0040214f e81a250000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+00402154 83c404          add     esp,4
+00402157 8945ac          mov     dword ptr [ebp-54h],eax
+0040215a c745fc02000000  mov     dword ptr [ebp-4],2
+00402161 85c0            test    eax,eax
+00402163 740c            je      image00400000+0x2171 (00402171)
+00402165 ff733c          push    dword ptr [ebx+3Ch]                            ; obf_dta->b64_agent
+00402168 8bc8            mov     ecx,eax
+0040216a e8411f0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes  "wget"
+0040216f eb02            jmp     image00400000+0x2173 (00402173)
+00402171 33c0            xor     eax,eax
+00402173 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+0040217a 8945f0          mov     dword ptr [ebp-10h],eax
+0040217d 8945c4          mov     dword ptr [ebp-3Ch],eax
+00402180 85c0            test    eax,eax
+00402182 0f843d040000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+00402188 6a08            push    8
+0040218a e8df240000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+0040218f 83c404          add     esp,4
+00402192 8945ac          mov     dword ptr [ebp-54h],eax
+00402195 c745fc03000000  mov     dword ptr [ebp-4],3
+0040219c 85c0            test    eax,eax
+0040219e 740c            je      image00400000+0x21ac (004021ac)
+004021a0 ff7340          push    dword ptr [ebx+40h]                            ; obf_dta->b64_http_method
+004021a3 8bc8            mov     ecx,eax
+004021a5 e8061f0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "POST"
+004021aa eb02            jmp     image00400000+0x21ae (004021ae)
+004021ac 33c0            xor     eax,eax
+004021ae 8945ec          mov     dword ptr [ebp-14h],eax
+004021b1 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+004021b8 85c0            test    eax,eax
+004021ba 0f8405040000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+004021c0 6a08            push    8
+004021c2 e8a7240000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+004021c7 83c404          add     esp,4
+004021ca 8945ac          mov     dword ptr [ebp-54h],eax
+004021cd c745fc04000000  mov     dword ptr [ebp-4],4
+004021d4 85c0            test    eax,eax
+004021d6 740c            je      image00400000+0x21e4 (004021e4)
+004021d8 ff7344          push    dword ptr [ebx+44h]                            ; obf_dta->b64_url
+004021db 8bc8            mov     ecx,eax
+004021dd e8ce1e0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "index.php"
+004021e2 eb02            jmp     image00400000+0x21e6 (004021e6)
+004021e4 33c0            xor     eax,eax
+004021e6 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+004021ed 8945e8          mov     dword ptr [ebp-18h],eax
+004021f0 8945bc          mov     dword ptr [ebp-44h],eax
+004021f3 85c0            test    eax,eax
+004021f5 0f84ca030000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+004021fb 6a08            push    8
+004021fd e86c240000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+00402202 83c404          add     esp,4
+00402205 8945ac          mov     dword ptr [ebp-54h],eax
+00402208 c745fc05000000  mov     dword ptr [ebp-4],5
+0040220f 85c0            test    eax,eax
+00402211 740c            je      image00400000+0x221f (0040221f)
+00402213 ff7348          push    dword ptr [ebx+48h]                            ; obf_dta->b64_cont_tpy
+00402216 8bc8            mov     ecx,eax
+00402218 e8931e0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "Content-Type:application/x-www-form-urlencoded"
+0040221d eb02            jmp     image00400000+0x2221 (00402221)
+0040221f 33c0            xor     eax,eax
+00402221 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402228 8945e4          mov     dword ptr [ebp-1Ch],eax
+0040222b 8945b8          mov     dword ptr [ebp-48h],eax
+0040222e 85c0            test    eax,eax
+00402230 0f848f030000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+00402236 6a08            push    8
+00402238 e831240000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+0040223d 83c404          add     esp,4
+00402240 8945ac          mov     dword ptr [ebp-54h],eax
+00402243 c745fc06000000  mov     dword ptr [ebp-4],6
+0040224a 85c0            test    eax,eax
+0040224c 740c            je      image00400000+0x225a (0040225a)
+0040224e ff734c          push    dword ptr [ebx+4Ch]                            ; obf_dta->b64_key_prm
+00402251 8bc8            mov     ecx,eax
+00402253 e8581e0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "key="
+00402258 eb02            jmp     image00400000+0x225c (0040225c)
+0040225a 33c0            xor     eax,eax
+0040225c c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402263 8945e0          mov     dword ptr [ebp-20h],eax
+00402266 8945b4          mov     dword ptr [ebp-4Ch],eax
+00402269 85c0            test    eax,eax
+0040226b 0f8454030000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+00402271 6a08            push    8
+00402273 e8f6230000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+00402278 83c404          add     esp,4
+0040227b 8945ac          mov     dword ptr [ebp-54h],eax
+0040227e c745fc07000000  mov     dword ptr [ebp-4],7
+00402285 85c0            test    eax,eax
+00402287 740c            je      image00400000+0x2295 (00402295)
+00402289 ff7350          push    dword ptr [ebx+50h]                            ; obf_dta->b64_xored_pass
+0040228c 8bc8            mov     ecx,eax
+0040228e e81d1e0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "!bw8"
+00402293 eb02            jmp     image00400000+0x2297 (00402297)
+00402295 33c0            xor     eax,eax
+00402297 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+0040229e 8945dc          mov     dword ptr [ebp-24h],eax
+004022a1 8945b0          mov     dword ptr [ebp-50h],eax
+004022a4 85c0            test    eax,eax
+004022a6 0f8419030000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+004022ac 6a08            push    8
+004022ae e8bb230000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+004022b3 83c404          add     esp,4
+004022b6 8945ac          mov     dword ptr [ebp-54h],eax
+004022b9 c745fc08000000  mov     dword ptr [ebp-4],8
+004022c0 85c0            test    eax,eax
+004022c2 740c            je      image00400000+0x22d0 (004022d0)
+004022c4 ff7354          push    dword ptr [ebx+54h]                            ; obf_dta->b64_blup
+004022c7 8bc8            mov     ecx,eax
+004022c9 e8e21d0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "blup"
+004022ce eb02            jmp     image00400000+0x22d2 (004022d2)
+004022d0 33c0            xor     eax,eax
+004022d2 c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+004022d9 8945ac          mov     dword ptr [ebp-54h],eax
+004022dc 85c0            test    eax,eax
+004022de 0f84e1020000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+004022e4 6a08            push    8
+004022e6 e883230000      call    image00400000+0x466e (0040466e)                ; malloc(8)
+004022eb 83c404          add     esp,4
+004022ee 8945d8          mov     dword ptr [ebp-28h],eax
+004022f1 c745fc09000000  mov     dword ptr [ebp-4],9
+004022f8 85c0            test    eax,eax
+004022fa 740c            je      image00400000+0x2308 (00402308)
+004022fc ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+004022ff 8bc8            mov     ecx,eax
+00402301 e8aa1d0000      call    image00400000+0x40b0 (004040b0)                ; b64_decode(): decodes "wininet.dll"
+00402306 eb02            jmp     image00400000+0x230a (0040230a)
+00402308 33c0            xor     eax,eax
+0040230a 8945d8          mov     dword ptr [ebp-28h],eax
+0040230d c745fcffffffff  mov     dword ptr [ebp-4],0FFFFFFFFh
+00402314 85c0            test    eax,eax
+00402316 0f84a9020000    je      image00400000+0x25c5 (004025c5)                ; no memory -> goto finish
+
+; start initializing remote_args
+0040231c 8bce            mov     ecx,esi
+0040231e e84dfaffff      call    image00400000+0x1d70 (00401d70)                ; sets: remote_args->LoadLibraryA, remote_args->get_proc_addr_obfus
+; copy decoded strings into remote_args
+00402323 8b0f            mov     ecx,dword ptr [edi]
+00402325 8d561a          lea     edx,[esi+1Ah]
+00402328 8a01            mov     al,byte ptr [ecx]
+0040232a 8802            mov     byte ptr [edx],al
+0040232c 8d4901          lea     ecx,[ecx+1]
+0040232f 8d5201          lea     edx,[edx+1]
+00402332 84c0            test    al,al
+00402334 75f2            jne     image00400000+0x2328 (00402328)                ; copy remote_args->str_http_host
+00402336 8b4df0          mov     ecx,dword ptr [ebp-10h]
+00402339 b850000000      mov     eax,50h
+0040233e 66894618        mov     word ptr [esi+18h],ax                          ; http_port
+00402342 8b09            mov     ecx,dword ptr [ecx]
+00402344 8d96ce050000    lea     edx,[esi+5CEh]
+0040234a 8d9b00000000    lea     ebx,[ebx]
+00402350 8a01            mov     al,byte ptr [ecx]
+00402352 8802            mov     byte ptr [edx],al
+00402354 8d4901          lea     ecx,[ecx+1]
+00402357 8d5201          lea     edx,[edx+1]
+0040235a 84c0            test    al,al
+0040235c 75f2            jne     image00400000+0x2350 (00402350)                ; copy remote_args->str_agent
+0040235e 8b4dec          mov     ecx,dword ptr [ebp-14h]
+00402361 8d964e070000    lea     edx,[esi+74Eh]
+00402367 8b09            mov     ecx,dword ptr [ecx]
+00402369 8da42400000000  lea     esp,[esp]
+00402370 8a01            mov     al,byte ptr [ecx]
+00402372 8802            mov     byte ptr [edx],al
+00402374 8d4901          lea     ecx,[ecx+1]
+00402377 8d5201          lea     edx,[edx+1]
+0040237a 84c0            test    al,al
+0040237c 75f2            jne     image00400000+0x2370 (00402370)                ; copy remote_args->str_http_method
+0040237e 8b4de8          mov     ecx,dword ptr [ebp-18h]
+00402381 8d9619010000    lea     edx,[esi+119h]
+00402387 8b09            mov     ecx,dword ptr [ecx]
+00402389 8da42400000000  lea     esp,[esp]
+00402390 8a01            mov     al,byte ptr [ecx]
+00402392 8802            mov     byte ptr [edx],al
+00402394 8d4901          lea     ecx,[ecx+1]
+00402397 8d5201          lea     edx,[edx+1]
+0040239a 84c0            test    al,al
+0040239c 75f2            jne     image00400000+0x2390 (00402390)                ; copy remote_args->str_url
+0040239e 8b4de4          mov     ecx,dword ptr [ebp-1Ch]
+004023a1 8d964e060000    lea     edx,[esi+64Eh]
+004023a7 8b09            mov     ecx,dword ptr [ecx]
+004023a9 8da42400000000  lea     esp,[esp]
+004023b0 8a01            mov     al,byte ptr [ecx]
+004023b2 8802            mov     byte ptr [edx],al
+004023b4 8d4901          lea     ecx,[ecx+1]
+004023b7 8d5201          lea     edx,[edx+1]
+004023ba 84c0            test    al,al
+004023bc 75f2            jne     image00400000+0x23b0 (004023b0)                ; copy remote_args->str_cont_tpy
+004023be 8b4de0          mov     ecx,dword ptr [ebp-20h]
+004023c1 8dbece060000    lea     edi,[esi+6CEh]
+004023c7 8b09            mov     ecx,dword ptr [ecx]
+004023c9 8bd7            mov     edx,edi
+004023cb eb03            jmp     image00400000+0x23d0 (004023d0)
+004023cd 8d4900          lea     ecx,[ecx]
+004023d0 8a01            mov     al,byte ptr [ecx]
+004023d2 8802            mov     byte ptr [edx],al
+004023d4 8d4901          lea     ecx,[ecx+1]
+004023d7 8d5201          lea     edx,[edx+1]
+004023da 84c0            test    al,al
+004023dc 75f2            jne     image00400000+0x23d0 (004023d0)
+004023de bae07d4100      mov     edx,offset image00400000+0x17de0 (00417de0)    ; g_key_val
+004023e3 8bf2            mov     esi,edx
+004023e5 8a02            mov     al,byte ptr [edx]
+004023e7 42              inc     edx
+004023e8 84c0            test    al,al
+004023ea 75f9            jne     image00400000+0x23e5 (004023e5)
+004023ec 2bd6            sub     edx,esi
+004023ee 4f              dec     edi
+004023ef 90              nop
+004023f0 8a4701          mov     al,byte ptr [edi+1]
+004023f3 47              inc     edi
+004023f4 84c0            test    al,al
+004023f6 75f8            jne     image00400000+0x23f0 (004023f0)
+004023f8 8bca            mov     ecx,edx
+004023fa c1e902          shr     ecx,2
+004023fd f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+004023ff 8bca            mov     ecx,edx
+00402401 83e103          and     ecx,3
+00402404 f3a4            rep movs byte ptr es:[edi],byte ptr [esi]              ; copy remote_args->str_key_val (as "key="+g_key_val)
+00402406 8b75d0          mov     esi,dword ptr [ebp-30h]
+00402409 b9e07d4100      mov     ecx,offset image00400000+0x17de0 (00417de0)
+0040240e 8d96ee070000    lea     edx,[esi+7EEh]
+00402414 2bd1            sub     edx,ecx
+00402416 8a01            mov     al,byte ptr [ecx]
+00402418 880411          mov     byte ptr [ecx+edx],al
+0040241b 8d4901          lea     ecx,[ecx+1]
+0040241e 84c0            test    al,al
+00402420 75f4            jne     image00400000+0x2416 (00402416)                ; copy remote_args->str_key_val_only
+00402422 8b4ddc          mov     ecx,dword ptr [ebp-24h]
+00402425 8d968e070000    lea     edx,[esi+78Eh]
+0040242b 8b09            mov     ecx,dword ptr [ecx]
+0040242d 8d4900          lea     ecx,[ecx]
+00402430 8a01            mov     al,byte ptr [ecx]
+00402432 8802            mov     byte ptr [edx],al
+00402434 8d4901          lea     ecx,[ecx+1]
+00402437 8d5201          lea     edx,[edx+1]
+0040243a 84c0            test    al,al
+0040243c 75f2            jne     image00400000+0x2430 (00402430)                ; copy remote_args->str_xored_pass
+0040243e 8b4dd8          mov     ecx,dword ptr [ebp-28h]
+00402441 8d960e080000    lea     edx,[esi+80Eh]
+00402447 8b09            mov     ecx,dword ptr [ecx]
+00402449 8da42400000000  lea     esp,[esp]
+00402450 8a01            mov     al,byte ptr [ecx]
+00402452 8802            mov     byte ptr [edx],al
+00402454 8d4901          lea     ecx,[ecx+1]
+00402457 8d5201          lea     edx,[edx+1]
+0040245a 84c0            test    al,al
+0040245c 75f2            jne     image00400000+0x2450 (00402450)                ; copy remote_args->str_wininet
+; copy xored_congrats (0x20 bytes)
+0040245e f30f7e05145c4100 movq    xmm0,mmword ptr [image00400000+0x15c14 (00415c14)]
+00402466 660fd6862e080000 movq    mmword ptr [esi+82Eh],xmm0
+0040246e f30f7e051c5c4100 movq    xmm0,mmword ptr [image00400000+0x15c1c (00415c1c)]
+00402476 660fd68636080000 movq    mmword ptr [esi+836h],xmm0
+0040247e f30f7e05245c4100 movq    xmm0,mmword ptr [image00400000+0x15c24 (00415c24)]
+00402486 660fd6863e080000 movq    mmword ptr [esi+83Eh],xmm0
+0040248e f30f7e052c5c4100 movq    xmm0,mmword ptr [image00400000+0x15c2c (00415c2c)]
+00402496 660fd68646080000 movq    mmword ptr [esi+846h],xmm0
+0040249e c7860009000020000000 mov dword ptr [esi+900h],20h
+; initialize APIs
+004024a8 ff7330          push    dword ptr [ebx+30h]                            ; obf_dta->obfus_MessageBoxA
+004024ab 8bce            mov     ecx,esi
+004024ad ff7308          push    dword ptr [ebx+8]                              ; obf_dta->b64_User32
+004024b0 e81bf8ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+004024b5 898624020000    mov     dword ptr [esi+224h],eax                       ; set remote_args->MessageBoxA
+004024bb ff7360          push    dword ptr [ebx+60h]                            ; obf_dta->obfus_LoadLibraryA
+004024be 8bce            mov     ecx,esi
+004024c0 ff7318          push    dword ptr [ebx+18h]                            ; obf_dta->b64_kernel32
+004024c3 e808f8ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+004024c8 89862c020000    mov     dword ptr [esi+22Ch],eax                       ; set remote_args->LoadLibraryA
+004024ce ff735c          push    dword ptr [ebx+5Ch]                            ; obf_dta->obfus_InternetOpenA
+004024d1 8bce            mov     ecx,esi
+004024d3 ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+004024d6 e8f5f7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+004024db 898628020000    mov     dword ptr [esi+228h],eax                       ; set remote_args->InternetOpenA
+004024e1 ff7364          push    dword ptr [ebx+64h]                            ; obf_dta->obfus_InternetConnectA
+004024e4 8bce            mov     ecx,esi
+004024e6 ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+004024e9 e8e2f7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+004024ee 898630020000    mov     dword ptr [esi+230h],eax                       ; set remote_args->InternetConnectA
+004024f4 ff7368          push    dword ptr [ebx+68h]                            ; obf_dta->obfus_HttpOpenRequestA
+004024f7 8bce            mov     ecx,esi
+004024f9 ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+004024fc e8cff7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+00402501 898634020000    mov     dword ptr [esi+234h],eax                       ; set remote_args->HttpOpenRequestA
+00402507 ff736c          push    dword ptr [ebx+6Ch]                            ; obf_dta->obfus_HttpSendRequestA
+0040250a 8bce            mov     ecx,esi
+0040250c ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+0040250f e8bcf7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+00402514 898638020000    mov     dword ptr [esi+238h],eax                       ; set remote_args->HttpSendRequestA
+0040251a ff7370          push    dword ptr [ebx+70h]                            ; obf_dta->obfus_InternetReadFile
+0040251d 8bce            mov     ecx,esi
+0040251f ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+00402522 e8a9f7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+00402527 89863c020000    mov     dword ptr [esi+23Ch],eax                       ; set remote_args->InternetReadFile
+0040252d ff7374          push    dword ptr [ebx+74h]                            ; obf_dta->obfus_InternetCloseHandle
+00402530 8bce            mov     ecx,esi
+00402532 ff7358          push    dword ptr [ebx+58h]                            ; obf_dta->b64_wininet
+00402535 e896f7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+0040253a 898640020000    mov     dword ptr [esi+240h],eax                       ; set remote_args->InternetCloseHandle
+00402540 ff7378          push    dword ptr [ebx+78h]                            ; obf_dta->obfus_ExitProcess
+00402543 8bce            mov     ecx,esi
+00402545 ff7318          push    dword ptr [ebx+18h]                            ; obf_dta->b64_kernel32
+00402548 e883f7ffff      call    image00400000+0x1cd0 (00401cd0)                ; get_proc_addr_obfus2()
+0040254d 8b4dd4          mov     ecx,dword ptr [ebp-2Ch]
+00402550 898644020000    mov     dword ptr [esi+244h],eax                       ; set remote_args->ExitProcess
+00402556 8b09            mov     ecx,dword ptr [ecx]
+00402558 8d964e050000    lea     edx,[esi+54Eh]
+0040255e 8bff            mov     edi,edi
+00402560 8a01            mov     al,byte ptr [ecx]
+00402562 8802            mov     byte ptr [edx],al
+00402564 8d4901          lea     ecx,[ecx+1]
+00402567 8d5201          lea     edx,[edx+1]
+0040256a 84c0            test    al,al
+0040256c 75f2            jne     image00400000+0x2560 (00402560)                ; copy remote_args->str_end
+0040256e 83be2402000000  cmp     dword ptr [esi+224h],0
+00402575 7448            je      image00400000+0x25bf (004025bf)
+00402577 83be2c02000000  cmp     dword ptr [esi+22Ch],0
+0040257e 743f            je      image00400000+0x25bf (004025bf)
+00402580 83be2802000000  cmp     dword ptr [esi+228h],0
+00402587 7436            je      image00400000+0x25bf (004025bf)
+00402589 83be3002000000  cmp     dword ptr [esi+230h],0
+00402590 742d            je      image00400000+0x25bf (004025bf)
+00402592 83be3402000000  cmp     dword ptr [esi+234h],0
+00402599 7424            je      image00400000+0x25bf (004025bf)
+0040259b 83be3802000000  cmp     dword ptr [esi+238h],0
+004025a2 741b            je      image00400000+0x25bf (004025bf)
+004025a4 83be3c02000000  cmp     dword ptr [esi+23Ch],0
+004025ab 7412            je      image00400000+0x25bf (004025bf)
+004025ad 83be4002000000  cmp     dword ptr [esi+240h],0
+004025b4 7409            je      image00400000+0x25bf (004025bf)
+004025b6 83be4402000000  cmp     dword ptr [esi+244h],0
+004025bd 7506            jne     image00400000+0x25c5 (004025c5)                ; finish
+; error -> crash
+004025bf 6834144200      push    421434h
+004025c4 c3              ret
+finish:
+004025c5 8d45cc          lea     eax,[ebp-34h]
+004025c8 50              push    eax
+004025c9 e802f8ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025ce 8d45c8          lea     eax,[ebp-38h]
+004025d1 50              push    eax
+004025d2 e8f9f7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025d7 8d45c4          lea     eax,[ebp-3Ch]
+004025da 50              push    eax
+004025db e8f0f7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025e0 8d45c0          lea     eax,[ebp-40h]
+004025e3 50              push    eax
+004025e4 e8e7f7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025e9 8d45bc          lea     eax,[ebp-44h]
+004025ec 50              push    eax
+004025ed e8def7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025f2 8d45b8          lea     eax,[ebp-48h]
+004025f5 50              push    eax
+004025f6 e8d5f7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+004025fb 8d45b4          lea     eax,[ebp-4Ch]
+004025fe 50              push    eax
+004025ff e8ccf7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+00402604 8d45b0          lea     eax,[ebp-50h]
+00402607 50              push    eax
+00402608 e8c3f7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+0040260d 8d45ac          lea     eax,[ebp-54h]
+00402610 50              push    eax
+00402611 e8baf7ffff      call    image00400000+0x1dd0 (00401dd0)                ; free()
+00402616 8bc6            mov     eax,esi
+00402618 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+0040261b 64890d00000000  mov     dword ptr fs:[0],ecx
+00402622 59              pop     ecx
+00402623 5f              pop     edi
+00402624 5e              pop     esi
+00402625 5b              pop     ebx
+00402626 8be5            mov     esp,ebp
+00402628 5d              pop     ebp
+00402629 c3              ret
+
+;
+; init_obfus_data_for_remote()
+;
+00404190 b8a875f0bd      mov     eax,0BDF075A8h
+00404195 2da01dafbd      sub     eax,0BDAF1DA0h
+0040419a a3947f4100      mov     dword ptr [image00400000+0x17f94 (00417f94)],eax               ; 00415808
+0040419f c7413024584100  mov     dword ptr [ecx+30h],offset image00400000+0x15824 (00415824)
+004041a6 c7413470264100  mov     dword ptr [ecx+34h],offset image00400000+0x12670 (00412670)
+004041ad c7413880264100  mov     dword ptr [ecx+38h],offset image00400000+0x12680 (00412680)
+004041b4 c7413c90264100  mov     dword ptr [ecx+3Ch],offset image00400000+0x12690 (00412690)
+004041bb c741409c264100  mov     dword ptr [ecx+40h],offset image00400000+0x1269c (0041269c)
+004041c2 c74144a8264100  mov     dword ptr [ecx+44h],offset image00400000+0x126a8 (004126a8)
+004041c9 c74148b8264100  mov     dword ptr [ecx+48h],offset image00400000+0x126b8 (004126b8)
+004041d0 c7414cfc264100  mov     dword ptr [ecx+4Ch],offset image00400000+0x126fc (004126fc)
+004041d7 a1947f4100      mov     eax,dword ptr [image00400000+0x17f94 (00417f94)]
+004041dc 894150          mov     dword ptr [ecx+50h],eax
+004041df c7415408274100  mov     dword ptr [ecx+54h],offset image00400000+0x12708 (00412708)
+004041e6 c7415814274100  mov     dword ptr [ecx+58h],offset image00400000+0x12714 (00412714)
+004041ed c7415c886c4100  mov     dword ptr [ecx+5Ch],offset image00400000+0x16c88 (00416c88)
+004041f4 c74160746c4100  mov     dword ptr [ecx+60h],offset image00400000+0x16c74 (00416c74)
+004041fb c74164606c4100  mov     dword ptr [ecx+64h],offset image00400000+0x16c60 (00416c60)
+00404202 c741684c6c4100  mov     dword ptr [ecx+68h],offset image00400000+0x16c4c (00416c4c)
+00404209 c7416cdc694100  mov     dword ptr [ecx+6Ch],offset image00400000+0x169dc (004169dc)
+00404210 c74170d4644100  mov     dword ptr [ecx+70h],offset image00400000+0x164d4 (004164d4)
+00404217 c7417494614100  mov     dword ptr [ecx+74h],offset image00400000+0x16194 (00416194)
+0040421e c74178345c4100  mov     dword ptr [ecx+78h],offset image00400000+0x15c34 (00415c34)
+00404225 c3              ret
+
+; ------------------------------------------------------------------------------
+ All of the code below is executed as a part of the remote thread call run within
+ a remote module (userinit.exe). The code may be executed at any addr base therefore
+ it is specifically crafted:
+ - No absolute addressing - only relative addressing mode allowed.
+ - All exported proc are loaded by the parent process (the final module) and provided
+   to the thread in remote_args struct.
+ - Libraries which are not loaded by the remote module must be loaded dynamically by
+   the thread code, e.g.: wininet.dll in userinit.exe
+ - code is self-contained (contains all internal call procs within it).
+   xor_with_tab() is also included in the remote code but has been removed from the
+   disassembly as described elsewhere.
+; ------------------------------------------------------------------------------
+
+;
+; remote_thread(LPVOID lpParameter)
+; This thread sends a key value to the local HTTP server (http://localhost/index.php)
+; via POST and reads a response. The  response is checked (via xor_with_tab() proc)
+; with the hardcoded password (stored in remote_args->str_xored_pass; 4 bytes long).
+; In case of success the congrats (decoded) is sent to the local HTTP server and the
+; message box "THE END." is displayed.
+;
+00401420 55              push    ebp
+00401421 8bec            mov     ebp,esp
+00401423 53              push    ebx
+00401424 8b5d08          mov     ebx,dword ptr [ebp+8]                          ; remote_args
+00401427 56              push    esi
+00401428 8d830e080000    lea     eax,[ebx+80Eh]
+0040142e 50              push    eax
+0040142f 8b832c020000    mov     eax,dword ptr [ebx+22Ch]
+00401435 ffd0            call    eax                                            ; LoadLibraryA("wininet.dll"): load a library not loaded by the remote module during exe load
+00401437 8d8bee070000    lea     ecx,[ebx+7EEh]
+0040143d 8bd1            mov     edx,ecx
+0040143f 8d7201          lea     esi,[edx+1]
+00401442 8a02            mov     al,byte ptr [edx]
+00401444 42              inc     edx
+00401445 84c0            test    al,al
+00401447 75f9            jne     image00400000+0x1442 (00401442)
+00401449 8d8348020000    lea     eax,[ebx+248h]                                 ; xor_tab_key_val[]
+0040144f 2bd6            sub     edx,esi                                        ; strlen(str_key_val_only)
+00401451 50              push    eax
+00401452 e889020000      call    image00400000+0x16e0 (004016e0)                ; prepare_xor_tab(ecx:str_key_val_only, edx:strlen(str_key_val_only), xor_tab_key_val)
+00401457 83c404          add     esp,4
+0040145a 8d83ce050000    lea     eax,[ebx+5CEh]
+00401460 6a00            push    0                                              ; arg: dwFlags==0
+00401462 6a00            push    0                                              ; arg: lpszProxyBypass==NULL
+00401464 6a00            push    0                                              ; arg: lpszProxyName==NULL
+00401466 6a00            push    0                                              ; arg: INTERNET_OPEN_TYPE_PRECONFIG
+00401468 50              push    eax                                            ; arg: lpszAgent==str_agent
+00401469 8b8328020000    mov     eax,dword ptr [ebx+228h]
+0040146f ffd0            call    eax                                            ; h_inet = InternetOpenA()
+00401471 8bc8            mov     ecx,eax
+00401473 894b08          mov     dword ptr [ebx+8],ecx                          ; h_inet
+00401476 85c9            test    ecx,ecx
+00401478 0f8411020000    je      image00400000+0x168f (0040168f)                ; h_inet==NULL -> goto finish
+0040147e 0fb74318        movzx   eax,word ptr [ebx+18h]
+00401482 6a01            push    1                                              ; arg: dwContext==0 (?)
+00401484 6a00            push    0                                              ; arg: dwFlags==0
+00401486 6a03            push    3                                              ; arg: INTERNET_SERVICE_HTTP
+00401488 6a00            push    0                                              ; arg: lpszPassword==NULL
+0040148a 6a00            push    0                                              ; arg: lpszUsername==NULL
+0040148c 50              push    eax                                            ; arg: nServerPort==80
+0040148d 8d431a          lea     eax,[ebx+1Ah]
+00401490 50              push    eax                                            ; arg: str_http_host
+00401491 8b8330020000    mov     eax,dword ptr [ebx+230h]
+00401497 51              push    ecx                                            ; arg: h_inet
+00401498 ffd0            call    eax                                            ; h_conn = InternetConnectA()
+0040149a 894314          mov     dword ptr [ebx+14h],eax                        ; h_conn
+0040149d 85c0            test    eax,eax
+0040149f 0f84ea010000    je      image00400000+0x168f (0040168f)                ; h_conn==NULL -> goto finish
+004014a5 6801100000      push    1001h                                          ; arg: dwContext==0x1001 (?)
+004014aa 6800000080      push    80000000h                                      ; arg: INTERNET_FLAG_RELOAD
+004014af 6a00            push    0                                              ; arg: lplpszAcceptTypes==NULL
+004014b1 6a00            push    0                                              ; arg: lpszReferer==NULL
+004014b3 6a00            push    0                                              ; arg: lpszVersion==NULL
+004014b5 8d8b19010000    lea     ecx,[ebx+119h]
+004014bb 51              push    ecx                                            ; arg: lpszObjectName==str_url
+004014bc 8d934e070000    lea     edx,[ebx+74Eh]
+004014c2 52              push    edx                                            ; arg: lpszVerb==str_http_method
+004014c3 50              push    eax                                            ; arg: h_conn
+004014c4 8b8334020000    mov     eax,dword ptr [ebx+234h]
+004014ca ffd0            call    eax                                            ; h_req = HttpOpenRequestA(): 1st request
+004014cc 8bd0            mov     edx,eax
+004014ce 895310          mov     dword ptr [ebx+10h],edx                        ; h_req
+004014d1 85d2            test    edx,edx
+004014d3 0f84b6010000    je      image00400000+0x168f (0040168f)                ; h_req==NULL -> goto finish
+004014d9 8db3ce060000    lea     esi,[ebx+6CEh]                                 ; str_key_val
+004014df 8bce            mov     ecx,esi
+004014e1 57              push    edi
+004014e2 8d7901          lea     edi,[ecx+1]
+004014e5 8a01            mov     al,byte ptr [ecx]
+004014e7 41              inc     ecx
+004014e8 84c0            test    al,al
+004014ea 75f9            jne     image00400000+0x14e5 (004014e5)
+004014ec 2bcf            sub     ecx,edi                                        ; strlen(str_key_val)
+004014ee 51              push    ecx                                            ; arg: HTTP body length
+004014ef 56              push    esi                                            ; arg: HTTP body: str_key_val
+004014f0 6aff            push    0FFFFFFFFh                                     ; arg: dwHeadersLength (zero term ASCII)
+004014f2 8d834e060000    lea     eax,[ebx+64Eh]
+004014f8 50              push    eax                                            ; arg: "Content-Type:application/x-www-form-urlencoded"
+004014f9 8b8338020000    mov     eax,dword ptr [ebx+238h]
+004014ff 52              push    edx                                            ; arg: h_req
+00401500 ffd0            call    eax                                            ; HttpSendRequestA()
+00401502 85c0            test    eax,eax
+00401504 0f8484010000    je      image00400000+0x168e (0040168e)                ; API error -> goto finish2
+0040150a 8db394080000    lea     esi,[ebx+894h]
+00401510 56              push    esi                                            ; arg: &n_bytes_read
+00401511 6a64            push    64h                                            ; arg: sizeof(out_buf)==0x64
+00401513 8d8398080000    lea     eax,[ebx+898h]
+00401519 50              push    eax                                            ; arg: out_buf: output buffer
+0040151a ff7310          push    dword ptr [ebx+10h]                            ; arg: h_req
+0040151d 8b833c020000    mov     eax,dword ptr [ebx+23Ch]
+00401523 ffd0            call    eax                                            ; InternetReadFile()
+00401525 85c0            test    eax,eax
+00401527 0f8461010000    je      image00400000+0x168e (0040168e)                ; API error -> goto finish2
+0040152d 8b4310          mov     eax,dword ptr [ebx+10h]
+00401530 85c0            test    eax,eax
+00401532 7410            je      image00400000+0x1544 (00401544)
+00401534 50              push    eax
+00401535 8b8340020000    mov     eax,dword ptr [ebx+240h]
+0040153b ffd0            call    eax                                            ; InternetCloseHandle(h_req)
+0040153d c7431000000000  mov     dword ptr [ebx+10h],0                          ; h_req=0
+
+; analyse HTTP response
+00401544 833e04          cmp     dword ptr [esi],4
+00401547 0f8541010000    jne     image00400000+0x168e (0040168e)                ; if (n_bytes_read!=4) goto finish2
+0040154d 8d834a030000    lea     eax,[ebx+34Ah]                                 ; xor_tab_key_val_cpy
+00401553 8bf8            mov     edi,eax
+00401555 b940000000      mov     ecx,40h
+0040155a 8db348020000    lea     esi,[ebx+248h]                                 ; xor_tab_key_val
+00401560 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+00401562 50              push    eax
+00401563 66a5            movs    word ptr es:[edi],word ptr [esi]               ; memcpy(xor_tab_key_val_cpy, xor_tab_key_val, 0x100)
+00401565 6a04            push    4
+00401567 8db398080000    lea     esi,[ebx+898h]
+0040156d 56              push    esi
+0040156e e8fd010000      call    image00400000+0x1770 (00401770)                ; xor_with_tab(out_buf, 4, xor_tab_key_val_cpy): out_buf is xored with xor_tab_key_val
+00401573 8b06            mov     eax,dword ptr [esi]
+00401575 83c40c          add     esp,0Ch
+00401578 3b838e070000    cmp     eax,dword ptr [ebx+78Eh]
+0040157e 0f850a010000    jne     image00400000+0x168e (0040168e)                ; xor'ed outbuf shall equal str_xored_pass, otherwise -> goto finish
+00401584 6801100000      push    1001h
+00401589 6800000080      push    80000000h
+0040158e 6a00            push    0
+00401590 6a00            push    0
+00401592 6a00            push    0
+00401594 8d8319010000    lea     eax,[ebx+119h]
+0040159a 50              push    eax                                            ; arg: lpszObjectName==str_url
+0040159b 8d834e070000    lea     eax,[ebx+74Eh]                                 ; arg: lpszVerb==str_http_method
+004015a1 50              push    eax
+004015a2 ff7314          push    dword ptr [ebx+14h]                            ; arg: h_conn
+004015a5 8b8334020000    mov     eax,dword ptr [ebx+234h]
+004015ab ffd0            call    eax                                            ; h_req2 = HttpOpenRequestA(): 2nd request
+004015ad 8983fc080000    mov     dword ptr [ebx+8FCh],eax                       ; h_req2
+004015b3 85c0            test    eax,eax
+004015b5 0f84d3000000    je      image00400000+0x168e (0040168e)                ; h_req2==NULL -> goto finish2
+004015bb 8d8b0e080000    lea     ecx,[ebx+80Eh]                                 ; "wininet.dll"
+004015c1 8bd1            mov     edx,ecx
+004015c3 8d7201          lea     esi,[edx+1]
+004015c6 8a02            mov     al,byte ptr [edx]
+004015c8 42              inc     edx
+004015c9 84c0            test    al,al
+004015cb 75f9            jne     image00400000+0x15c6 (004015c6)
+004015cd 8dbb4c040000    lea     edi,[ebx+44Ch]                                 ; xor_tab_wininet
+004015d3 2bd6            sub     edx,esi                                        ; strlen("wininet.dll")
+004015d5 57              push    edi
+004015d6 e805010000      call    image00400000+0x16e0 (004016e0)                ; prepare_xor_tab(ecx:"wininet.dll", edx:strlen("wininet.dll"), xor_tab_wininet)
+004015db 57              push    edi
+004015dc ffb300090000    push    dword ptr [ebx+900h]
+004015e2 8d832e080000    lea     eax,[ebx+82Eh]
+004015e8 50              push    eax
+004015e9 e882010000      call    image00400000+0x1770 (00401770)                ; xor_with_tab(xored_congrats, xored_congrats_len, xor_tab_wininet): decodes to "Thats all. Congratulations!"
+004015ee 8d834a030000    lea     eax,[ebx+34Ah]                                 ; xor_tab_key_val_cpy
+004015f4 8bf8            mov     edi,eax
+004015f6 b940000000      mov     ecx,40h
+004015fb 8db348020000    lea     esi,[ebx+248h]
+00401601 f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+00401603 50              push    eax
+00401604 ffb300090000    push    dword ptr [ebx+900h]
+0040160a 8d832e080000    lea     eax,[ebx+82Eh]
+00401610 50              push    eax
+00401611 66a5            movs    word ptr es:[edi],word ptr [esi]               ; memcpy(xor_tab_key_val_cpy, xor_tab_key_val, 0x100)
+00401613 e858010000      call    image00400000+0x1770 (00401770)                ; xor_with_tab(xored_congrats, xored_congrats_len, xor_tab_key_val_cpy): decode congrats by xor_tab_key_val to be sent to the server
+00401618 8db398080000    lea     esi,[ebx+898h]
+0040161e 8d8b9a080000    lea     ecx,[ebx+89Ah]
+00401624 83c41c          add     esp,1Ch
+00401627 c60672          mov     byte ptr [esi],72h
+0040162a c683990800003d  mov     byte ptr [ebx+899h],3Dh
+00401631 c60100          mov     byte ptr [ecx],0                               ; out_buf[]: "r="
+00401634 83bb0009000000  cmp     dword ptr [ebx+900h],0
+0040163b 761a            jbe     image00400000+0x1657 (00401657)
+0040163d ba66f7ffff      mov     edx,0FFFFF766h
+00401642 2bd3            sub     edx,ebx
+
+; append encoded congrats (xored_congrats) with "r="; result in out_buf[]
+; BUG: encoding of this param doesn't match the "application/x-www-form-urlencoded"
+; content type and causes problems on an HTTP server
+00401644 8a4194          mov     al,byte ptr [ecx-6Ch]                          ; mov al, [ecx+0x82e]
+00401647 8801            mov     byte ptr [ecx],al
+00401649 8d4901          lea     ecx,[ecx+1]
+0040164c 8d040a          lea     eax,[edx+ecx]
+0040164f 3b8300090000    cmp     eax,dword ptr [ebx+900h]
+00401655 72ed            jb      image00400000+0x1644 (00401644)
+
+00401657 6a00            push    0
+00401659 6a00            push    0
+0040165b 8d834e050000    lea     eax,[ebx+54Eh]
+00401661 50              push    eax
+00401662 8b8324020000    mov     eax,dword ptr [ebx+224h]
+00401668 6a00            push    0
+0040166a ffd0            call    eax                                            ; MessageBoxA(NULL, "THE END.", NULL, MB_OK)
+0040166c 8b8300090000    mov     eax,dword ptr [ebx+900h]
+00401672 83c002          add     eax,2
+00401675 50              push    eax                                            ; arg: HTTP body length (xored_congrats_len+strlen("r="))
+00401676 56              push    esi                                            ; arg: HTTP body: out_buf
+00401677 6aff            push    0FFFFFFFFh                                     ; arg: dwHeadersLength (zero term ASCII)
+00401679 8d834e060000    lea     eax,[ebx+64Eh]
+0040167f 50              push    eax                                            ; arg: "Content-Type:application/x-www-form-urlencoded"
+00401680 ffb3fc080000    push    dword ptr [ebx+8FCh]                           ; arg: h_req2
+00401686 8b8338020000    mov     eax,dword ptr [ebx+238h]
+0040168c ffd0            call    eax                                            ; HttpSendRequestA(): send congrats to the server
+finish2:
+0040168e 5f              pop     edi
+finish:
+; free allocated resources
+0040168f 8b4308          mov     eax,dword ptr [ebx+8]
+00401692 85c0            test    eax,eax
+00401694 7409            je      image00400000+0x169f (0040169f)
+00401696 50              push    eax
+00401697 8b8340020000    mov     eax,dword ptr [ebx+240h]
+0040169d ffd0            call    eax                                            ; InternetCloseHandle(h_inet)
+0040169f 8b4314          mov     eax,dword ptr [ebx+14h]
+004016a2 85c0            test    eax,eax
+004016a4 7409            je      image00400000+0x16af (004016af)
+004016a6 50              push    eax
+004016a7 8b8340020000    mov     eax,dword ptr [ebx+240h]
+004016ad ffd0            call    eax                                            ; InternetCloseHandle(h_conn)
+004016af 8b4310          mov     eax,dword ptr [ebx+10h]
+004016b2 85c0            test    eax,eax
+004016b4 7409            je      image00400000+0x16bf (004016bf)
+004016b6 50              push    eax
+004016b7 8b8340020000    mov     eax,dword ptr [ebx+240h]
+004016bd ffd0            call    eax                                            ; InternetCloseHandle(h_req)
+004016bf 8b83fc080000    mov     eax,dword ptr [ebx+8FCh]
+004016c5 85c0            test    eax,eax
+004016c7 7409            je      image00400000+0x16d2 (004016d2)
+004016c9 50              push    eax
+004016ca 8b8340020000    mov     eax,dword ptr [ebx+240h]
+004016d0 ffd0            call    eax                                            ; InternetCloseHandle(h_req2)
+004016d2 8b8344020000    mov     eax,dword ptr [ebx+244h]
+004016d8 6a00            push    0
+004016da ffd0            call    eax                                            ; ExitProcess(0)
+004016dc 5e              pop     esi
+004016dd 5b              pop     ebx
+004016de 5d              pop     ebp
+004016df c3              ret
+
+;
+; prepare_xor_tab(ecx:init_tab, edx:sz_init_tab, byte xor_tab[0x102])
+; Initializes xor_tab from some init_tab[].
+;
+004016e0 55              push    ebp
+004016e1 8bec            mov     ebp,esp
+004016e3 83ec0c          sub     esp,0Ch
+004016e6 53              push    ebx
+004016e7 56              push    esi
+004016e8 57              push    edi
+004016e9 8b7d08          mov     edi,dword ptr [ebp+8]                          ; xor_tab[]
+004016ec 8955f8          mov     dword ptr [ebp-8],edx                          ; sz_init_tab
+004016ef 894df4          mov     dword ptr [ebp-0Ch],ecx                        ; init_tab
+004016f2 33c0            xor     eax,eax
+004016f4 8bf7            mov     esi,edi
+004016f6 ba00010000      mov     edx,100h
+004016fb eb03            jmp     image00400000+0x1700 (00401700)
+004016fd 8d4900          lea     ecx,[ecx]
+; fill xor_tab with 1,2,3...
+00401700 8806            mov     byte ptr [esi],al
+00401702 40              inc     eax
+00401703 8d7601          lea     esi,[esi+1]
+00401706 663bc2          cmp     ax,dx
+00401709 7cf5            jl      image00400000+0x1700 (00401700)
+; initialize xor_tab
+0040170b 66c787000100000000 mov   word ptr [edi+100h],0                         ; xor_tab[0x100]=0
+00401714 32d2            xor     dl,dl                                          ; j=0
+00401716 c7450800000000  mov     dword ptr [ebp+8],0                            ; k=0
+0040171d 8bdf            mov     ebx,edi
+0040171f c745fc00010000  mov     dword ptr [ebp-4],100h                         ; i=0
+init_loop:
+00401726 0fb6f2          movzx   esi,dl                                         ; j
+00401729 8a13            mov     dl,byte ptr [ebx]                              ; xor_tab[i]
+0040172b 0fb6040e        movzx   eax,byte ptr [esi+ecx]                         ; init_tab[j]
+0040172f 034508          add     eax,dword ptr [ebp+8]                          ; init_tab[j]+k
+00401732 0fb6ca          movzx   ecx,dl
+00401735 03c8            add     ecx,eax
+00401737 81e1ff000080    and     ecx,800000FFh
+0040173d 7908            jns     image00400000+0x1747 (00401747)
+0040173f 49              dec     ecx
+00401740 81c900ffffff    or      ecx,0FFFFFF00h
+00401746 41              inc     ecx
+00401747 0fb6c9          movzx   ecx,cl                                         ; xor_tab[i]+init_tab[j]+k
+0040174a 43              inc     ebx
+0040174b 8a0439          mov     al,byte ptr [ecx+edi]
+; xchng xor_tab[i] and xor_tab[xor_tab[i]+init_tab[j]+k]
+0040174e 8843ff          mov     byte ptr [ebx-1],al                            ; xor_tab[i] = xor_tab[xor_tab[i]+init_tab[j]+k]
+00401751 881439          mov     byte ptr [ecx+edi],dl                          ; xor_tab[xor_tab[i]+init_tab[j]+k] = previous xor_tab[i]
+
+00401754 8d4601          lea     eax,[esi+1]
+00401757 99              cdq
+00401758 f77df8          idiv    eax,dword ptr [ebp-8]                          ; j = (j+1)%sz_init_tab
+0040175b ff4dfc          dec     dword ptr [ebp-4]                              ; i--
+0040175e 894d08          mov     dword ptr [ebp+8],ecx                          ; k += xor_tab[i]+init_tab[j]
+00401761 8b4df4          mov     ecx,dword ptr [ebp-0Ch]
+00401764 75c0            jne     image00400000+0x1726 (00401726)                ; if (i<0x100) goto init_loop
+00401766 5f              pop     edi
+00401767 5e              pop     esi
+00401768 5b              pop     ebx
+00401769 8be5            mov     esp,ebp
+0040176b 5d              pop     ebp
+0040176c c3              ret
+0040176d cc              int     3
+0040176e cc              int     3
+0040176f cc              int     3

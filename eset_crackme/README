@@ -1,0 +1,110 @@
+The detailed analysis is contained in the .\disasm\note-* files constituting my
+annotated disassembly of the crackme. This is merely a brief description of results
+of my reverse engineering with references to the disasm files for more details.
+
+I. LOADING THE MAIN MODULE
+
+The goal of the 1st exe module (referenced later as the main module) is to load
+the target crackme module (referenced later as the final module), which will
+overload (replace) the main module on its standard win32 exe base (0x400000).
+The loading process performs as follows:
+
+1. The main module loads supportive dll (dll_overloader) which PE file image is
+   located in the code (.text) PE section of the original (pre-upx'ed) main module.
+2. The main module initializes the library being loaded by calling its Entry Point (EP).
+3. The above process of loading and calling EP is performed "manually" by the main
+   module (not using the LoadLibrary() system call). The debugger existence is
+   checked during the loading process and if it's detected the library's sections
+   will not be loaded causing a crash.
+4. The library is usually placed at 0x10000000 (as stated in its PE header) but may
+   be reloced to other base if necessary.
+5. After successful library load the main module calls the only library export:
+   dll_overloader!vovr().
+6. The export proc loads the final module which will overload the loading one (the
+   main module). The way of loading is very similar to the main module's loading.
+7. The export proc checks debugger existence to perform successfully (using an other
+   method than the main module) - if a debugger is detected, the final module's
+   imports will not to be loaded causing a crash.
+8. The PE file image of the final (overloading) module is located in the resources
+   (.rsrc) section of the original (pre-upx'ed) main module and is encrypted.
+9. Finally dll_overloader!vovr() jumps to EP of the final module. The loading process
+   is finished!
+
+NOTES:
+1. Directories .\1-main, .\2-dll_overloaded and .\3-final contain dumps of the PE
+   images of the main, dll_overloader and the final modules respectively. They also
+   provide PE header's details of these modules, their PE sects dumps and code
+   (.text) sections disassembly.
+2. For more details related to the main module loading process, see .\disasm\note-1-main,
+   especially load_overloader() proc. The main() proc in this file gives a good
+   insight into the overall loading process.
+3. Export dll_overloader!vovr() disasm in .\disasm\note-2-dll_overloader contains
+   details for the final module overloading, it's very similar to the main module.
+4. It's very easy to bypass the anti-debugger tricks used by the crackme.
+   The .\windbg directory contains 2 scripts for 32/64-bit platforms to hide the
+   windbg debugger, jump to the final module's main() proc and dump the module's PE
+   file image. Refer to .\disasm\note-1-main and .\disasm\note-2-dll_overloader
+   for more details related to anti-debug analysis and where to find proper places
+   to dump the final and dll_overloader modules.
+
+II. CRACKME'S MODULE ANALYSIS
+
+The already loaded final module performs the actual crackme job in the following way:
+
+1. The dialog-proc of the application's dialog box does nothing more than checking
+   correctness of the 1st stage password (provided in the clear text: "Lets do this").
+   Also it verifies against proving a fake password for the 2nd stage control edit.
+2. The 2nd stage password is verified in other place than the main dialog-proc:
+   during the initialization of the application (implemented for the WM_INITDIALOG
+   message handling) there is provided a dedicated window proc for the 2nd stage
+   control edit.
+3. All the stuff of setting this window proc uses obfuscated libraries and proc
+   names to load them and retrieve their exports. Additionally the crackme tries
+   to move (if possible) EP of used exports to defence against setting breakpoints
+   on them.
+4. The 2nd stage edit control's window proc handles the WM_GETTEXT message to check
+   the 2nd stage password. The correct password is hard-coded in the app (located
+   in the data (.data) section of the original (pre-upx'ed) final module) but is
+   encoded by something I called the xor_tab algo.
+5. After the 2nd stage password is performed successfully the window proc lunches
+   the remote thread on the remote module (SYSTEM_DIR/userinit.exe) to perform
+   the last, 3rd stage of verification. The remote module process is created in
+   the suspended mode and is finished immediately after the remote thread had done
+   its job.
+6. The remote thread tries to connect to a local HTTP server and sends a specific
+   "key" to it. The key is a random value established by the initialization proc
+   (WM_INITDIALOG message handling).
+7. To perform successfully the 3rd stage, the HTTP server must correctly response
+   to the "key challenge" by sending a value which matches the correct 3rd stage
+   password. The HTTP server response bases on the passed key and the correct 3rd
+   stage password the crackme expects. Again the 3rd stage password is hard-coded
+   in the .data section of the final module, but its verification process includes
+   the xor_tab algo.
+8. After a successful verification of the 3rd stage password, the remote thread
+   display a message box and sends a congrats message (xor_tab algo decoded), which
+   is "Thats all. Congratulations!". There is a bug in the remote thread's code -
+   the message is improperly encoded in a HTTP POST causing a problem on the server
+   side.
+
+NOTES:
+1. .\disasm\note-3-final_main contains analysis of the main() proc of the final
+   module, including the dialog-proc and WM_INITDIALOG message handling. Most
+   important part here is a call to the 2nd stage edit initialization function:
+   init_ed2().
+2. The initialization proc also tries to remove the "SeDebugPrivilege" to disable
+   crackme debugging. However, it doesn't affect currently debugged app. Additionally -
+   doesn't work on legacy win platforms (like XP).
+3. .\disasm\note-3-ed2 contains analysis of the 2nd stage password verification.
+   All the obfuscation stuff, xor_tab algo and anti-bp methods have been analysed
+   here. Look at call_thread_in_remotemod() for more info about the remote thread call.
+4. .\disasm\note-4-remote contains analysis of the remote thread code including
+   its params struct initialization (remote_args_init() proc).
+5. In my opinion the remote code is the MOST INTERESTING part of the crackme.
+   The code is specifically crafted (e.g. only relative addressing mode allowed,
+   dynamically loading exports from libs not included in the remote (host) module
+   etc.). It's also very hard to debug, since it's not an easy task to attach
+   to a remote module, especially suspended up to the remote thread call.
+   To bypass this obstacle I dumped a remote thread's code into a file and wrote
+   a dedicated app running this code in a controlled way. Refer to the sources
+   in the directory .\4-remote for details. Refer to .\disamp\note-3-ed2 to find
+   a place where I use to set a breakpoint to dump this code.

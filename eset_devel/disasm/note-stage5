@@ -1,0 +1,82 @@
+;
+; chk_stage5(esi:h_lib)
+;
+; Look for an export with a name which depends on the current time (year, month,
+; day, hour or minute). The export name is generated as follows:
+;   spritf(proc_name, "%04X%04X%04X%04X", year, month, day, hour_min);
+; When the export is called it must return back a predefined value: 0x35371337.
+;
+; NOTE: Bug in the checking proc: depending on the platform's endianess the proc
+; name may be dependant on the current hour (LE platform) or minute (BE platform).
+;
+004021b0 55              push    ebp
+004021b1 8bec            mov     ebp,esp
+004021b3 83ec38          sub     esp,38h
+004021b6 a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+004021bb 33c5            xor     eax,ebp
+004021bd 8945fc          mov     dword ptr [ebp-4],eax
+004021c0 33c0            xor     eax,eax
+004021c2 8d4dcc          lea     ecx,[ebp-34h]
+004021c5 51              push    ecx                                            ; &time (type of SYSTEMTIME)
+004021c6 668945cc        mov     word ptr [ebp-34h],ax
+004021ca 8945ce          mov     dword ptr [ebp-32h],eax
+004021cd 8945d2          mov     dword ptr [ebp-2Eh],eax
+004021d0 8945d6          mov     dword ptr [ebp-2Ah],eax
+004021d3 668945da        mov     word ptr [ebp-26h],ax
+004021d7 ff1568d04000    call    dword ptr [image00400000+0xd068 (0040d068)]    ; kernel32!GetLocalTime()
+004021dd 8b55d4          mov     edx,dword ptr [ebp-2Ch]                        ; dword th = *(dword*)&time.Hour  (contains time.wMinute)
+004021e0 8b4dce          mov     ecx,dword ptr [ebp-32h]
+004021e3 33c0            xor     eax,eax
+004021e5 8945dd          mov     dword ptr [ebp-23h],eax
+004021e8 8945e1          mov     dword ptr [ebp-1Fh],eax
+004021eb 8945e5          mov     dword ptr [ebp-1Bh],eax
+004021ee 8945e9          mov     dword ptr [ebp-17h],eax
+004021f1 8945ed          mov     dword ptr [ebp-13h],eax
+004021f4 8945f1          mov     dword ptr [ebp-0Fh],eax
+004021f7 8945f5          mov     dword ptr [ebp-0Bh],eax
+004021fa 668945f9        mov     word ptr [ebp-7],ax
+004021fe 8845fb          mov     byte ptr [ebp-5],al
+00402201 8b45d2          mov     eax,dword ptr [ebp-2Eh]
+00402204 f7d2            not     edx
+00402206 81e2ffff0000    and     edx,0FFFFh
+0040220c 52              push    edx                                            ; print arg 4: (~th)&0xffff  (on LE platforms: hour, BE platforms: minute)
+0040220d 8b55cc          mov     edx,dword ptr [ebp-34h]
+00402210 f7d0            not     eax
+00402212 25ffff0000      and     eax,0FFFFh
+00402217 50              push    eax                                            ; print arg 3: (~time.wDay)&0xffff
+00402218 f7d1            not     ecx
+0040221a 81e1ffff0000    and     ecx,0FFFFh
+00402220 51              push    ecx                                            ; print arg 2: (~time.wMonth)&0xffff
+00402221 f7d2            not     edx
+00402223 81e2ffff0000    and     edx,0FFFFh
+00402229 52              push    edx                                            ; print arg 1: (~time.wYear)&0xffff 
+0040222a 8d45dc          lea     eax,[ebp-24h]                                  ; char s5_proc_name[]
+0040222d 6838ee4000      push    offset image00400000+0xee38 (0040ee38)
+00402232 50              push    eax
+00402233 c645dc00        mov     byte ptr [ebp-24h],0
+00402237 e8ce020000      call    image00400000+0x250a (0040250a)                ; sprintf(s5_proc_name, "%04X%04X%04X%04X", ...)
+0040223c 83c418          add     esp,18h
+0040223f 8d4ddc          lea     ecx,[ebp-24h]
+00402242 51              push    ecx
+00402243 56              push    esi
+00402244 ff1570d04000    call    dword ptr [image00400000+0xd070 (0040d070)]    ; kernel32!GetProcAddress(h_lib, s5_proc_name)
+0040224a 85c0            test    eax,eax
+0040224c 7510            jne     image00400000+0x225e (0040225e)                ; finish_success
+; stage 5 failed
+0040224e 32c0            xor     al,al
+00402250 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00402253 33cd            xor     ecx,ebp
+00402255 e8a1020000      call    image00400000+0x24fb (004024fb)
+0040225a 8be5            mov     esp,ebp
+0040225c 5d              pop     ebp
+0040225d c3              ret
+finish_success:
+0040225e ffd0            call    eax                                            ; stage5_callback()
+00402260 8b4dfc          mov     ecx,dword ptr [ebp-4]
+00402263 3d37133735      cmp     eax,35371337h                                  ; must return value 0x35371337 to success
+00402268 0f94c0          sete    al
+0040226b 33cd            xor     ecx,ebp
+0040226d e889020000      call    image00400000+0x24fb (004024fb)
+00402272 8be5            mov     esp,ebp
+00402274 5d              pop     ebp
+00402275 c3              ret

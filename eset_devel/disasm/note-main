@@ -1,0 +1,808 @@
+;
+; dialog window creation
+;
+004024c6 6a00            push    0
+004024c8 6870234000      push    offset image00400000+0x2370 (00402370)         ; DlgProc
+004024cd 6a00            push    0
+004024cf 6a65            push    65h
+004024d1 50              push    eax
+004024d2 ff155cd14000    call    dword ptr [image00400000+0xd15c (0040d15c)]    ; DialogBoxParamW()
+
+; uMsg
+#define WM_CLOSE                        0x0010
+#define WM_INITDIALOG                   0x0110
+#define WM_COMMAND                      0x0111
+#define WM_SYSCOMMAND                   0x0112
+#define WM_CTLCOLORSTATIC               0x0138
+#define WM_MOUSEMOVE                    0x0200
+#define WM_LBUTTONDBLCLK                0x0203
+
+;
+; DlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+;
+00402370 55              push    ebp
+00402371 8bec            mov     ebp,esp
+00402373 8b450c          mov     eax,dword ptr [ebp+0Ch]
+00402376 56              push    esi
+00402377 3d38010000      cmp     eax,138h
+0040237c 0f87b6000000    ja      image00400000+0x2438 (00402438)                ; if (uMsg>WM_CTLCOLORSTATIC) goto 00402438
+00402382 0f848b000000    je      image00400000+0x2413 (00402413)                ; if (uMsg==WM_CTLCOLORSTATIC) goto 00402413
+00402388 83e810          sub     eax,10h
+0040238b 744b            je      image00400000+0x23d8 (004023d8)                ; if (uMsg==WM_CLOSE) goto 004023d8
+0040238d 2d00010000      sub     eax,100h
+00402392 7430            je      image00400000+0x23c4 (004023c4)                ; if (uMsg==WM_INITDIALOG) goto 004023c4
+00402394 48              dec     eax
+00402395 0f85a9000000    jne     image00400000+0x2444 (00402444)                ; goto not_handled
+
+; WM_COMMAND: close button handler
+0040239b b8e9030000      mov     eax,3E9h
+004023a0 663b4510        cmp     ax,word ptr [ebp+10h]
+004023a4 0f85f8000000    jne     image00400000+0x24a2 (004024a2)                ; if (wParam==0x03E9) goto msg_handled
+004023aa 8b4d08          mov     ecx,dword ptr [ebp+8]
+004023ad 6a00            push    0
+004023af 6a00            push    0
+004023b1 6a10            push    10h
+004023b3 51              push    ecx
+004023b4 ff157cd14000    call    dword ptr [image00400000+0xd17c (0040d17c)]    ; USER32!SendMessageW(hwndDlg, WM_CLOSE, 0, 0)
+004023ba b801000000      mov     eax,1
+004023bf 5e              pop     esi
+004023c0 5d              pop     ebp
+004023c1 c21000          ret     10h
+
+; WM_INITDIALOG
+004023c4 57              push    edi
+004023c5 8b7d08          mov     edi,dword ptr [ebp+8]
+004023c8 e8b3feffff      call    image00400000+0x2280 (00402280)                ; init_dialog()
+004023cd 5f              pop     edi
+004023ce b801000000      mov     eax,1
+004023d3 5e              pop     esi
+004023d4 5d              pop     ebp
+004023d5 c21000          ret     10h
+
+; WM_CLOSE: kill flames thread and exit dialog
+004023d8 803d6a1b410000  cmp     byte ptr [image00400000+0x11b6a (00411b6a)],0
+004023df c605691b410001  mov     byte ptr [image00400000+0x11b69 (00411b69)],1  ; finish_thread=1
+004023e6 7515            jne     image00400000+0x23fd (004023fd)                ; if (!is_thread_finished) goto 004023fd
+; wait for flames thread to finish
+004023e8 8b3578d04000    mov     esi,dword ptr [image00400000+0xd078 (0040d078)]
+004023ee 8bff            mov     edi,edi
+004023f0 6a64            push    64h
+004023f2 ffd6            call    esi                                            ; kernel32!Sleep(0x64)
+004023f4 803d6a1b410000  cmp     byte ptr [image00400000+0x11b6a (00411b6a)],0
+004023fb 74f3            je      image00400000+0x23f0 (004023f0)
+
+004023fd 8b5508          mov     edx,dword ptr [ebp+8]
+00402400 6a00            push    0
+00402402 52              push    edx
+00402403 ff156cd14000    call    dword ptr [image00400000+0xd16c (0040d16c)]    ; SER32!EndDialog(hwndDlg, 0)
+00402409 b801000000      mov     eax,1
+0040240e 5e              pop     esi
+0040240f 5d              pop     ebp
+00402410 c21000          ret     10h
+
+; WM_CTLCOLORSTATIC
+00402413 8b7510          mov     esi,dword ptr [ebp+10h]
+00402416 68ffffff00      push    0FFFFFFh
+0040241b 56              push    esi
+0040241c ff1508d04000    call    dword ptr [image00400000+0xd008 (0040d008)]    ; GDI32!SetTextColor((HDC)wParam, WHITE)
+00402422 6a01            push    1
+00402424 56              push    esi
+00402425 ff1514d04000    call    dword ptr [image00400000+0xd014 (0040d014)]    ; GDI32!SetBkMode((HDC)wParam, TRANSPARENT)
+0040242b 6a05            push    5
+0040242d ff1530d04000    call    dword ptr [image00400000+0xd030 (0040d030)]    ; GDI32!GetStockObject(NULL_BRUSH)
+00402433 5e              pop     esi
+00402434 5d              pop     ebp
+00402435 c21000          ret     10h
+
+; more checks
+00402438 2d00020000      sub     eax,200h
+0040243d 7441            je      image00400000+0x2480 (00402480)                ; if (uMsg>WM_MOUSEMOVE) goto 00402480
+0040243f 83e803          sub     eax,3
+00402442 7407            je      image00400000+0x244b (0040244b)                ; if (uMsg>WM_LBUTTONDBLCLK) goto 0040244b
+
+not_handled:
+00402444 33c0            xor     eax,eax
+00402446 5e              pop     esi
+00402447 5d              pop     ebp
+00402448 c21000          ret     10h
+
+; WM_LBUTTONDBLCLK: checks click on the "ESET" logo and toggle value flames_switch (from 0 to 1 or vice versa)
+0040244b 8b4514          mov     eax,dword ptr [ebp+14h]                        ; lParam = (y_pos<<16)|x_pos
+0040244e 8d48ec          lea     ecx,[eax-14h]
+00402451 6683f941        cmp     cx,41h
+00402455 774b            ja      image00400000+0x24a2 (004024a2)                ; if (x_pos>=0x14 && x_pos<0x55) goto msg_handled
+00402457 c1e810          shr     eax,10h
+0040245a 6683f814        cmp     ax,14h
+0040245e 7242            jb      image00400000+0x24a2 (004024a2)                ; if (y_pos<0x14) goto msg_handled
+00402460 6683f82d        cmp     ax,2Dh
+00402464 773c            ja      image00400000+0x24a2 (004024a2)                ; if (y_pos>0x2d) goto msg_handled
+00402466 803d681b410000  cmp     byte ptr [image00400000+0x11b68 (00411b68)],0
+0040246d b801000000      mov     eax,1                                          ; msg hanled
+00402472 0f94c2          sete    dl
+00402475 8815681b4100    mov     byte ptr [image00400000+0x11b68 (00411b68)],dl ; toggle flames_switch (0->1->0->...)
+0040247b 5e              pop     esi
+0040247c 5d              pop     ebp
+0040247d c21000          ret     10h
+
+; WM_MOUSEMOVE: moves the window catching at any point of it
+00402480 837d1001        cmp     dword ptr [ebp+10h],1
+00402484 751c            jne     image00400000+0x24a2 (004024a2)
+; left button is down
+00402486 ff1578d14000    call    dword ptr [image00400000+0xd178 (0040d178)]    ; USER32!ReleaseCapture()
+0040248c 8b4508          mov     eax,dword ptr [ebp+8]
+0040248f 6a00            push    0
+00402491 6812f00000      push    0F012h
+00402496 6812010000      push    112h
+0040249b 50              push    eax
+0040249c ff157cd14000    call    dword ptr [image00400000+0xd17c (0040d17c)]    ; USER32!SendMessageW(hwndDlg, WM_SYSCOMMAND, SC_DRAGMOVE, 0)
+
+msg_handled:
+004024a2 b801000000      mov     eax,1
+004024a7 5e              pop     esi
+004024a8 5d              pop     ebp
+004024a9 c21000          ret     10h
+
+;
+; init_dialog(edi:hwndDlg)
+;
+00402280 55              push    ebp
+00402281 8bec            mov     ebp,esp
+00402283 83e4f8          and     esp,0FFFFFFF8h
+00402286 83ec08          sub     esp,8
+00402289 53              push    ebx
+0040228a 56              push    esi
+0040228b 6a00            push    0
+0040228d 6a00            push    0
+0040228f 57              push    edi
+00402290 6830144000      push    offset image00400000+0x1430 (00401430)         ; flames_thread_proc()
+00402295 6a00            push    0
+00402297 6a00            push    0
+00402299 ff155cd04000    call    dword ptr [image00400000+0xd05c (0040d05c)]    ; kernel32!CreateThread(0, NULL, flames_thread_proc, hwndDlg, 0, NULL)
+0040229f 57              push    edi
+004022a0 e83bf0ffff      call    image00400000+0x12e0 (004012e0)
+004022a5 83c404          add     esp,4
+004022a8 8944240c        mov     dword ptr [esp+0Ch],eax                        ; h_lib = chk_stage1(hwndDlg)
+004022ac 85c0            test    eax,eax
+004022ae 0f84b5000000    je      image00400000+0x2369 (00402369)                ; if (!h_lib) goto finish
+
+; stage1 fulfilled; must be fulfilled to check other stages
+004022b4 8b3570d14000    mov     esi,dword ptr [image00400000+0xd170 (0040d170)]
+004022ba 6a00            push    0
+004022bc bb01000000      mov     ebx,1
+004022c1 53              push    ebx                                            ; n_stages = 1
+004022c2 68f1000000      push    0F1h
+004022c7 68eb030000      push    3EBh
+004022cc 57              push    edi
+004022cd ffd6            call    esi                                            ; SendDlgItemMessageW(hwndDlg, DLG_CB_STAGE_1, BM_SETCHECK, 1, 0)
+004022cf 8b4c240c        mov     ecx,dword ptr [esp+0Ch]
+004022d3 e808f8ffff      call    image00400000+0x1ae0 (00401ae0)                ; status = chk_stage2(ecx:h_lib)
+004022d8 84c0            test    al,al
+004022da 7415            je      image00400000+0x22f1 (004022f1)                ; if (status==0) stage failed
+
+; stage2 fulfilled
+004022dc 6a00            push    0
+004022de 53              push    ebx
+004022df 68f1000000      push    0F1h
+004022e4 68ec030000      push    3ECh
+004022e9 57              push    edi
+004022ea ffd6            call    esi                                            ; SendDlgItemMessageW(hwndDlg, DLG_CB_STAGE_2, BM_SETCHECK, 1, 0)
+004022ec bb02000000      mov     ebx,2                                          ; n_stages = 2
+004022f1 8b4c240c        mov     ecx,dword ptr [esp+0Ch]
+004022f5 e876f9ffff      call    image00400000+0x1c70 (00401c70)                ; status = chk_stage3(ecx:h_lib)
+004022fa 84c0            test    al,al
+004022fc 7412            je      image00400000+0x2310 (00402310)                ; if (status==0) stage failed
+
+; stage3 fulfilled
+004022fe 6a00            push    0
+00402300 6a01            push    1
+00402302 68f1000000      push    0F1h
+00402307 68ed030000      push    3EDh
+0040230c 57              push    edi
+0040230d ffd6            call    esi                                            ; SendDlgItemMessageW(hwndDlg, DLG_CB_STAGE_3, BM_SETCHECK, 1, 0)
+0040230f 43              inc     ebx                                            ; n_stages++
+00402310 8b4c240c        mov     ecx,dword ptr [esp+0Ch]
+00402314 e807fbffff      call    image00400000+0x1e20 (00401e20)                ; status = chk_stage4(ecx:h_lib)
+00402319 84c0            test    al,al
+0040231b 7412            je      image00400000+0x232f (0040232f)                ; if (status==0) stage failed
+
+; stage4 fulfilled
+0040231d 6a00            push    0
+0040231f 6a01            push    1
+00402321 68f1000000      push    0F1h
+00402326 68ee030000      push    3EEh
+0040232b 57              push    edi
+0040232c ffd6            call    esi                                            ; SendDlgItemMessageW(hwndDlg, DLG_CB_STAGE_4, BM_SETCHECK, 1, 0)
+0040232e 43              inc     ebx                                            ; n_stages++
+0040232f 8b74240c        mov     esi,dword ptr [esp+0Ch]
+00402333 e878feffff      call    image00400000+0x21b0 (004021b0)                ; status = chk_stage5(esi:h_lib)
+00402338 84c0            test    al,al
+0040233a 7416            je      image00400000+0x2352 (00402352)                ; if (status==0) stage failed
+
+; stage5 fulfilled
+0040233c 6a00            push    0
+0040233e 6a01            push    1
+00402340 68f1000000      push    0F1h
+00402345 68ef030000      push    3EFh
+0040234a 57              push    edi
+0040234b ff1570d14000    call    dword ptr [image00400000+0xd170 (0040d170)]    ; SendDlgItemMessageW(hwndDlg, DLG_CB_STAGE_5, BM_SETCHECK, 1, 0)
+00402351 43              inc     ebx                                            ; n_stages++
+
+00402352 83fb05          cmp     ebx,5
+00402355 7512            jne     image00400000+0x2369 (00402369)
+
+; all stages fulfilled
+00402357 6867666676      push    76666667h
+0040235c e86fedffff      call    image00400000+0x10d0 (004010d0)
+00402361 83c404          add     esp,4
+00402364 a3641b4100      mov     dword ptr [image00400000+0x11b64 (00411b64)],eax   ; flames_callback_addr = get_proc_addr_crc(esi:h_lib, 0x76666667)
+
+finish:
+00402369 5e              pop     esi
+0040236a 5b              pop     ebx
+0040236b 8be5            mov     esp,ebp
+0040236d 5d              pop     ebp
+0040236e c3              ret
+
+;
+; flames_thread_proc()
+;
+00401430 55              push    ebp
+00401431 8bec            mov     ebp,esp
+00401433 81ecd8000000    sub     esp,0D8h
+00401439 a104004100      mov     eax,dword ptr [image00400000+0x10004 (00410004)]
+0040143e 33c5            xor     eax,ebp
+00401440 8945f8          mov     dword ptr [ebp-8],eax
+00401443 8b4508          mov     eax,dword ptr [ebp+8]
+00401446 53              push    ebx
+00401447 56              push    esi
+00401448 57              push    edi
+00401449 68ea030000      push    3EAh
+0040144e 50              push    eax
+0040144f ff1568d14000    call    dword ptr [image00400000+0xd168 (0040d168)]    ; USER32!GetDlgItem()
+00401455 8bf0            mov     esi,eax
+00401457 897594          mov     dword ptr [ebp-6Ch],esi
+0040145a 85f6            test    esi,esi
+0040145c 0f8459060000    je      image00400000+0x1abb (00401abb)
+00401462 8d45e8          lea     eax,[ebp-18h]
+00401465 50              push    eax
+00401466 56              push    esi
+00401467 ff1558d14000    call    dword ptr [image00400000+0xd158 (0040d158)]    ; USER32!GetWindowRect()
+0040146d 8b7df0          mov     edi,dword ptr [ebp-10h]
+00401470 8b5df4          mov     ebx,dword ptr [ebp-0Ch]
+00401473 2b7de8          sub     edi,dword ptr [ebp-18h]
+00401476 2b5dec          sub     ebx,dword ptr [ebp-14h]
+00401479 56              push    esi
+0040147a 897dac          mov     dword ptr [ebp-54h],edi
+0040147d 899d68ffffff    mov     dword ptr [ebp-98h],ebx
+00401483 ff1560d14000    call    dword ptr [image00400000+0xd160 (0040d160)]    ; USER32!GetDC()
+00401489 8bf0            mov     esi,eax
+0040148b 89b574ffffff    mov     dword ptr [ebp-8Ch],esi
+00401491 85f6            test    esi,esi
+00401493 0f8422060000    je      image00400000+0x1abb (00401abb)
+00401499 803d691b410000  cmp     byte ptr [image00400000+0x11b69 (00411b69)],0
+004014a0 7542            jne     image00400000+0x14e4 (004014e4)                ; if (finish_thread) goto finish4
+
+; wait for loading image
+ldimg_wait_loop:
+004014a2 6a00            push    0
+004014a4 6a00            push    0
+004014a6 56              push    esi
+004014a7 ff152cd04000    call    dword ptr [image00400000+0xd02c (0040d02c)]    ; GDI32!GetPixel()
+004014ad 33c9            xor     ecx,ecx
+004014af 85c0            test    eax,eax
+004014b1 0f95c1          setne   cl
+004014b4 33d2            xor     edx,edx
+004014b6 83f8ff          cmp     eax,0FFFFFFFFh
+004014b9 0f95c2          setne   dl
+004014bc 85ca            test    edx,ecx
+004014be 751b            jne     image00400000+0x14db (004014db)                ; is image loaded
+004014c0 6a32            push    32h
+004014c2 ff1578d04000    call    dword ptr [image00400000+0xd078 (0040d078)]    ; kernel32!Sleep(0x32)
+004014c8 803d691b410000  cmp     byte ptr [image00400000+0x11b69 (00411b69)],0
+004014cf 74d1            je      image00400000+0x14a2 (004014a2)                ; if (!finish_thread) goto ldimg_wait_loop
+004014d1 8b4594          mov     eax,dword ptr [ebp-6Ch]
+004014d4 56              push    esi
+004014d5 50              push    eax
+004014d6 e9da050000      jmp     image00400000+0x1ab5 (00401ab5)                ; goto finish
+004014db 803d691b410000  cmp     byte ptr [image00400000+0x11b69 (00411b69)],0
+004014e2 740a            je      image00400000+0x14ee (004014ee)                ; if (!finish_thread) goto ldimg_wait_loop_end
+finish4:
+004014e4 8b4594          mov     eax,dword ptr [ebp-6Ch]
+004014e7 56              push    esi
+004014e8 50              push    eax
+004014e9 e9c7050000      jmp     image00400000+0x1ab5 (00401ab5)                ; goto finish
+
+ldimg_wait_loop_end:
+004014ee 56              push    esi
+004014ef ff1520d04000    call    dword ptr [image00400000+0xd020 (0040d020)]    ; GDI32!CreateCompatibleDC()
+004014f5 53              push    ebx
+004014f6 57              push    edi
+004014f7 56              push    esi
+004014f8 8945b4          mov     dword ptr [ebp-4Ch],eax
+004014fb ff1524d04000    call    dword ptr [image00400000+0xd024 (0040d024)]    ; GDI32!CreateCompatibleBitmap()
+00401501 56              push    esi
+00401502 8945b0          mov     dword ptr [ebp-50h],eax
+00401505 ff1520d04000    call    dword ptr [image00400000+0xd020 (0040d020)]    ; GDI32!CreateCompatibleDC()
+0040150b 53              push    ebx
+0040150c 57              push    edi
+0040150d 56              push    esi
+0040150e 8945a4          mov     dword ptr [ebp-5Ch],eax
+00401511 ff1524d04000    call    dword ptr [image00400000+0xd024 (0040d024)]    ; GDI32!CreateCompatibleBitmap()
+00401517 8b4db4          mov     ecx,dword ptr [ebp-4Ch]
+0040151a 8945a0          mov     dword ptr [ebp-60h],eax
+0040151d 85c9            test    ecx,ecx
+0040151f 0f8463050000    je      image00400000+0x1a88 (00401a88)
+00401525 8b55b0          mov     edx,dword ptr [ebp-50h]
+00401528 85d2            test    edx,edx
+0040152a 0f844e050000    je      image00400000+0x1a7e (00401a7e)                ; finish2
+00401530 837da400        cmp     dword ptr [ebp-5Ch],0
+00401534 0f8444050000    je      image00400000+0x1a7e (00401a7e)                ; finish2
+0040153a 85c0            test    eax,eax
+0040153c 0f843c050000    je      image00400000+0x1a7e (00401a7e)                ; finish2
+00401542 52              push    edx
+00401543 51              push    ecx
+00401544 ff151cd04000    call    dword ptr [image00400000+0xd01c (0040d01c)]    ; GDI32!SelectObject()
+0040154a 8b4da0          mov     ecx,dword ptr [ebp-60h]
+0040154d 8b55a4          mov     edx,dword ptr [ebp-5Ch]
+00401550 51              push    ecx
+00401551 52              push    edx
+00401552 ff151cd04000    call    dword ptr [image00400000+0xd01c (0040d01c)]    ; GDI32!SelectObject()
+00401558 8b45b4          mov     eax,dword ptr [ebp-4Ch]
+0040155b 682000cc00      push    0CC0020h
+00401560 6a00            push    0
+00401562 6a00            push    0
+00401564 56              push    esi
+00401565 53              push    ebx
+00401566 57              push    edi
+00401567 6a00            push    0
+00401569 6a00            push    0
+0040156b 50              push    eax
+0040156c ff1534d04000    call    dword ptr [image00400000+0xd034 (0040d034)]    ; GDI32!BitBlt()
+00401572 33c0            xor     eax,eax
+00401574 89853cffffff    mov     dword ptr [ebp-0C4h],eax
+0040157a 898530ffffff    mov     dword ptr [ebp-0D0h],eax
+00401580 898534ffffff    mov     dword ptr [ebp-0CCh],eax
+00401586 898538ffffff    mov     dword ptr [ebp-0C8h],eax
+0040158c 898540ffffff    mov     dword ptr [ebp-0C0h],eax
+00401592 898544ffffff    mov     dword ptr [ebp-0BCh],eax
+00401598 898548ffffff    mov     dword ptr [ebp-0B8h],eax
+0040159e 89854cffffff    mov     dword ptr [ebp-0B4h],eax
+004015a4 898550ffffff    mov     dword ptr [ebp-0B0h],eax
+004015aa 898554ffffff    mov     dword ptr [ebp-0ACh],eax
+004015b0 8d4801          lea     ecx,[eax+1]
+004015b3 89853cffffff    mov     dword ptr [ebp-0C4h],eax
+004015b9 8bc7            mov     eax,edi
+004015bb c1e005          shl     eax,5
+004015be 83c01f          add     eax,1Fh
+004015c1 99              cdq
+004015c2 83e21f          and     edx,1Fh
+004015c5 899d34ffffff    mov     dword ptr [ebp-0CCh],ebx
+004015cb 03c2            add     eax,edx
+004015cd c1f805          sar     eax,5
+004015d0 43              inc     ebx
+004015d1 0fafd8          imul    ebx,eax
+004015d4 89bd30ffffff    mov     dword ptr [ebp-0D0h],edi
+004015da 8bf8            mov     edi,eax
+004015dc 69ff94010000    imul    edi,edi,194h
+004015e2 03db            add     ebx,ebx
+004015e4 03db            add     ebx,ebx
+004015e6 53              push    ebx
+004015e7 c7852cffffff28000000 mov dword ptr [ebp-0D4h],28h
+004015f1 c78538ffffff01002000 mov dword ptr [ebp-0C8h],200001h
+004015fb 89857cffffff    mov     dword ptr [ebp-84h],eax
+00401601 89bd64ffffff    mov     dword ptr [ebp-9Ch],edi
+00401607 e84c100000      call    image00400000+0x2658 (00402658)
+0040160c 8bd8            mov     ebx,eax
+0040160e 57              push    edi
+0040160f 899d60ffffff    mov     dword ptr [ebp-0A0h],ebx
+00401615 e83e100000      call    image00400000+0x2658 (00402658)
+0040161a 57              push    edi
+0040161b 89459c          mov     dword ptr [ebp-64h],eax
+0040161e e835100000      call    image00400000+0x2658 (00402658)
+00401623 83c40c          add     esp,0Ch
+00401626 8bf8            mov     edi,eax
+00401628 897d84          mov     dword ptr [ebp-7Ch],edi
+0040162b 85db            test    ebx,ebx
+0040162d 0f8403040000    je      image00400000+0x1a36 (00401a36)
+00401633 8b559c          mov     edx,dword ptr [ebp-64h]
+00401636 85d2            test    edx,edx
+00401638 0f84f5030000    je      image00400000+0x1a33 (00401a33)                ; finish3
+0040163e 803d691b410000  cmp     byte ptr [image00400000+0x11b69 (00411b69)],0
+00401645 8a0d681b4100    mov     cl,byte ptr [image00400000+0x11b68 (00411b68)]
+0040164b c645bb01        mov     byte ptr [ebp-45h],1
+0040164f c645ba01        mov     byte ptr [ebp-46h],1
+00401653 884db9          mov     byte ptr [ebp-47h],cl
+00401656 0f859b030000    jne     image00400000+0x19f7 (004019f7)                ; if (finish_thread) goto draw_flames_loop_end
+0040165c 8b857cffffff    mov     eax,dword ptr [ebp-84h]
+00401662 03c0            add     eax,eax
+00401664 03c0            add     eax,eax
+00401666 8d3418          lea     esi,[eax+ebx]
+00401669 03c2            add     eax,edx
+0040166b 89b55cffffff    mov     dword ptr [ebp-0A4h],esi
+00401671 898558ffffff    mov     dword ptr [ebp-0A8h],eax
+00401677 eb0d            jmp     image00400000+0x1686 (00401686)
+00401679 8da42400000000  lea     esp,[esp]
+
+; draw flames
+draw_flames_loop:
+00401680 8a0d681b4100    mov     cl,byte ptr [image00400000+0x11b68 (00411b68)]
+00401686 384db9          cmp     byte ptr [ebp-47h],cl
+00401689 7407            je      image00400000+0x1692 (00401692)
+0040168b c645bb01        mov     byte ptr [ebp-45h],1
+0040168f 884db9          mov     byte ptr [ebp-47h],cl
+00401692 8b55b0          mov     edx,dword ptr [ebp-50h]
+00401695 6a00            push    0
+00401697 8d45bc          lea     eax,[ebp-44h]
+0040169a 50              push    eax
+0040169b 8b45b4          mov     eax,dword ptr [ebp-4Ch]
+0040169e 53              push    ebx
+0040169f b90b000000      mov     ecx,0Bh
+004016a4 8db52cffffff    lea     esi,[ebp-0D4h]
+004016aa 8d7dbc          lea     edi,[ebp-44h]
+004016ad f3a5            rep movs dword ptr es:[edi],dword ptr [esi]
+004016af 8b8d68ffffff    mov     ecx,dword ptr [ebp-98h]
+004016b5 51              push    ecx
+004016b6 6a00            push    0
+004016b8 52              push    edx
+004016b9 50              push    eax
+004016ba ff1510d04000    call    dword ptr [image00400000+0xd010 (0040d010)]    ; GDI32!GetDIBits()
+004016c0 807dbb00        cmp     byte ptr [ebp-45h],0
+004016c4 0f84cb000000    je      image00400000+0x1795 (00401795)
+004016ca 807dba00        cmp     byte ptr [ebp-46h],0
+004016ce 7418            je      image00400000+0x16e8 (004016e8)
+004016d0 8b8d64ffffff    mov     ecx,dword ptr [ebp-9Ch]
+004016d6 8b5584          mov     edx,dword ptr [ebp-7Ch]
+004016d9 51              push    ecx
+004016da 53              push    ebx
+004016db 52              push    edx
+004016dc e85f750000      call    image00400000+0x8c40 (00408c40)
+004016e1 83c40c          add     esp,0Ch
+004016e4 c645ba00        mov     byte ptr [ebp-46h],0
+004016e8 8b8564ffffff    mov     eax,dword ptr [ebp-9Ch]
+004016ee 8b4d84          mov     ecx,dword ptr [ebp-7Ch]
+004016f1 8b559c          mov     edx,dword ptr [ebp-64h]
+004016f4 50              push    eax
+004016f5 51              push    ecx
+004016f6 52              push    edx
+004016f7 e844750000      call    image00400000+0x8c40 (00408c40)
+004016fc 8b75ac          mov     esi,dword ptr [ebp-54h]
+004016ff 33c0            xor     eax,eax
+00401701 8903            mov     dword ptr [ebx],eax
+00401703 894304          mov     dword ptr [ebx+4],eax
+00401706 894308          mov     dword ptr [ebx+8],eax
+00401709 8944b3f4        mov     dword ptr [ebx+esi*4-0Ch],eax
+0040170d 8944b3f8        mov     dword ptr [ebx+esi*4-8],eax
+00401711 8944b3fc        mov     dword ptr [ebx+esi*4-4],eax
+00401715 8d46fc          lea     eax,[esi-4]
+00401718 83c40c          add     esp,0Ch
+0040171b c645bb00        mov     byte ptr [ebp-45h],0
+0040171f 83f803          cmp     eax,3
+00401722 7e74            jle     image00400000+0x1798 (00401798)
+00401724 83c0fd          add     eax,0FFFFFFFDh
+00401727 8d7b10          lea     edi,[ebx+10h]
+0040172a 8945a8          mov     dword ptr [ebp-58h],eax
+0040172d 8d4900          lea     ecx,[ecx]
+00401730 e855110000      call    image00400000+0x288a (0040288a)                ; prf()
+00401735 2501000080      and     eax,80000001h
+0040173a 7905            jns     image00400000+0x1741 (00401741)
+0040173c 48              dec     eax
+0040173d 83c8fe          or      eax,0FFFFFFFEh
+00401740 40              inc     eax
+00401741 7448            je      image00400000+0x178b (0040178b)
+00401743 a1641b4100      mov     eax,dword ptr [image00400000+0x11b64 (00411b64)]   ; if (flames_callback_addr) not_all_stages_resolved
+00401748 85c0            test    eax,eax
+0040174a 7432            je      image00400000+0x177e (0040177e)
+; flames_callback_addr has been set (all stages are resolved)
+0040174c 803d681b410000  cmp     byte ptr [image00400000+0x11b68 (00411b68)],0
+00401753 7429            je      image00400000+0x177e (0040177e)                ; if (flames_switch==0) goto not_all_stages_resolved
+; call flames_callback and check its return for flames change
+00401755 ffd0            call    eax
+00401757 894598          mov     dword ptr [ebp-68h],eax                        ; fclbk_ret = flames_callback()
+0040175a ff1574d04000    call    dword ptr [image00400000+0xd074 (0040d074)]    ; ticks = kernel32!GetTickCount()
+00401760 2b4598          sub     eax,dword ptr [ebp-68h]
+00401763 83f810          cmp     eax,10h
+00401766 7323            jae     image00400000+0x178b (0040178b)                ; if (ticks-fclbk_ret >= 0x10) don't change flames
+; change flames colour
+00401768 c747fc00ffff00  mov     dword ptr [edi-4],0FFFF00h
+0040176f c70700000000    mov     dword ptr [edi],0
+00401775 c747040080ff00  mov     dword ptr [edi+4],0FF8000h
+0040177c eb0d            jmp     image00400000+0x178b (0040178b)
+not_all_stages_resolved:
+0040177e c747fc00000000  mov     dword ptr [edi-4],0
+00401785 c707ffffff00    mov     dword ptr [edi],0FFFFFFh
+0040178b 83c704          add     edi,4
+0040178e ff4da8          dec     dword ptr [ebp-58h]
+00401791 759d            jne     image00400000+0x1730 (00401730)
+00401793 eb03            jmp     image00400000+0x1798 (00401798)
+
+00401795 8b75ac          mov     esi,dword ptr [ebp-54h]
+00401798 8b857cffffff    mov     eax,dword ptr [ebp-84h]
+0040179e 8b8d5cffffff    mov     ecx,dword ptr [ebp-0A4h]
+004017a4 8b9558ffffff    mov     edx,dword ptr [ebp-0A8h]
+004017aa 894588          mov     dword ptr [ebp-78h],eax
+004017ad c7458c00000000  mov     dword ptr [ebp-74h],0
+004017b4 bf64000000      mov     edi,64h
+004017b9 894da8          mov     dword ptr [ebp-58h],ecx
+004017bc 895590          mov     dword ptr [ebp-70h],edx
+004017bf 899d78ffffff    mov     dword ptr [ebp-88h],ebx
+004017c5 eb03            jmp     image00400000+0x17ca (004017ca)
+004017c7 8b75ac          mov     esi,dword ptr [ebp-54h]
+004017ca e8bb100000      call    image00400000+0x288a (0040288a)                ; prf()
+004017cf 99              cdq
+004017d0 8d4efa          lea     ecx,[esi-6]
+004017d3 f7f9            idiv    eax,ecx
+004017d5 8bf2            mov     esi,edx
+004017d7 e8ae100000      call    image00400000+0x288a (0040288a)                ; prf()
+004017dc 8b4dac          mov     ecx,dword ptr [ebp-54h]
+004017df 99              cdq
+004017e0 83c1fa          add     ecx,0FFFFFFFAh
+004017e3 f7f9            idiv    eax,ecx
+004017e5 8b44b30c        mov     eax,dword ptr [ebx+esi*4+0Ch]
+004017e9 8b4c930c        mov     ecx,dword ptr [ebx+edx*4+0Ch]
+004017ed 894cb30c        mov     dword ptr [ebx+esi*4+0Ch],ecx
+004017f1 8b8d78ffffff    mov     ecx,dword ptr [ebp-88h]
+004017f7 8944930c        mov     dword ptr [ebx+edx*4+0Ch],eax
+004017fb 8b45ac          mov     eax,dword ptr [ebp-54h]
+004017fe 48              dec     eax
+004017ff 83f801          cmp     eax,1
+00401802 0f8e6b010000    jle     image00400000+0x1973 (00401973)
+00401808 8b5588          mov     edx,dword ptr [ebp-78h]
+0040180b 2b558c          sub     edx,dword ptr [ebp-74h]
+0040180e 8d3491          lea     esi,[ecx+edx*4]
+00401811 8b5590          mov     edx,dword ptr [ebp-70h]
+00401814 2b55a8          sub     edx,dword ptr [ebp-58h]
+00401817 48              dec     eax
+00401818 899570ffffff    mov     dword ptr [ebp-90h],edx
+0040181e 894598          mov     dword ptr [ebp-68h],eax
+00401821 eb13            jmp     image00400000+0x1836 (00401836)
+00401823 eb0b            jmp     image00400000+0x1830 (00401830)
+00401825 8da42400000000  lea     esp,[esp]
+0040182c 8d642400        lea     esp,[esp]
+00401830 8b9570ffffff    mov     edx,dword ptr [ebp-90h]
+00401836 8b1432          mov     edx,dword ptr [edx+esi]
+00401839 89956cffffff    mov     dword ptr [ebp-94h],edx
+0040183f 8b01            mov     eax,dword ptr [ecx]
+00401841 c1e810          shr     eax,10h
+00401844 0fb6d0          movzx   edx,al
+00401847 8b5904          mov     ebx,dword ptr [ecx+4]
+0040184a 8bc3            mov     eax,ebx
+0040184c c1e810          shr     eax,10h
+0040184f 0fb6c0          movzx   eax,al
+00401852 03d0            add     edx,eax
+00401854 8b41fc          mov     eax,dword ptr [ecx-4]
+00401857 c1e810          shr     eax,10h
+0040185a 0fb6c0          movzx   eax,al
+0040185d 03d0            add     edx,eax
+0040185f b856555555      mov     eax,55555556h
+00401864 f7ea            imul    edx
+00401866 8bc2            mov     eax,edx
+00401868 c1e81f          shr     eax,1Fh
+0040186b 03c2            add     eax,edx
+0040186d 8b16            mov     edx,dword ptr [esi]
+0040186f c1ea10          shr     edx,10h
+00401872 0fb6d2          movzx   edx,dl
+00401875 8d1442          lea     edx,[edx+eax*2]
+00401878 b856555555      mov     eax,55555556h
+0040187d f7ea            imul    edx
+0040187f 8bc2            mov     eax,edx
+00401881 c1e81f          shr     eax,1Fh
+00401884 03c2            add     eax,edx
+00401886 8d57ff          lea     edx,[edi-1]
+00401889 0fafc2          imul    eax,edx
+0040188c 8b956cffffff    mov     edx,dword ptr [ebp-94h]
+00401892 c1ea10          shr     edx,10h
+00401895 0fb6d2          movzx   edx,dl
+00401898 03c2            add     eax,edx
+0040189a 99              cdq
+0040189b f7ff            idiv    eax,edi
+0040189d 8b11            mov     edx,dword ptr [ecx]
+0040189f c1ea08          shr     edx,8
+004018a2 0fb6d2          movzx   edx,dl
+004018a5 c1eb08          shr     ebx,8
+004018a8 0fb6db          movzx   ebx,bl
+004018ab 03d3            add     edx,ebx
+004018ad 8b59fc          mov     ebx,dword ptr [ecx-4]
+004018b0 c1eb08          shr     ebx,8
+004018b3 0fb6db          movzx   ebx,bl
+004018b6 03d3            add     edx,ebx
+004018b8 0fb6c0          movzx   eax,al
+004018bb c1e008          shl     eax,8
+004018be 894580          mov     dword ptr [ebp-80h],eax
+004018c1 b856555555      mov     eax,55555556h
+004018c6 f7ea            imul    edx
+004018c8 8bc2            mov     eax,edx
+004018ca c1e81f          shr     eax,1Fh
+004018cd 03c2            add     eax,edx
+004018cf 8b16            mov     edx,dword ptr [esi]
+004018d1 c1ea08          shr     edx,8
+004018d4 0fb6d2          movzx   edx,dl
+004018d7 8d1442          lea     edx,[edx+eax*2]
+004018da b856555555      mov     eax,55555556h
+004018df f7ea            imul    edx
+004018e1 8bc2            mov     eax,edx
+004018e3 c1e81f          shr     eax,1Fh
+004018e6 03c2            add     eax,edx
+004018e8 8d57ff          lea     edx,[edi-1]
+004018eb 0fafc2          imul    eax,edx
+004018ee 8b956cffffff    mov     edx,dword ptr [ebp-94h]
+004018f4 c1ea08          shr     edx,8
+004018f7 0fb6d2          movzx   edx,dl
+004018fa 03c2            add     eax,edx
+004018fc 99              cdq
+004018fd f7ff            idiv    eax,edi
+004018ff 8b5580          mov     edx,dword ptr [ebp-80h]
+00401902 0fb6c0          movzx   eax,al
+00401905 0bd0            or      edx,eax
+00401907 0fb601          movzx   eax,byte ptr [ecx]
+0040190a c1e208          shl     edx,8
+0040190d 895580          mov     dword ptr [ebp-80h],edx
+00401910 0fb651fc        movzx   edx,byte ptr [ecx-4]
+00401914 03d0            add     edx,eax
+00401916 0fb64104        movzx   eax,byte ptr [ecx+4]
+0040191a 03d0            add     edx,eax
+0040191c b856555555      mov     eax,55555556h
+00401921 f7ea            imul    edx
+00401923 8bc2            mov     eax,edx
+00401925 c1e81f          shr     eax,1Fh
+00401928 03c2            add     eax,edx
+0040192a 0fb616          movzx   edx,byte ptr [esi]
+0040192d 8d1442          lea     edx,[edx+eax*2]
+00401930 b856555555      mov     eax,55555556h
+00401935 f7ea            imul    edx
+00401937 8bc2            mov     eax,edx
+00401939 c1e81f          shr     eax,1Fh
+0040193c 03c2            add     eax,edx
+0040193e 8d57ff          lea     edx,[edi-1]
+00401941 0fafc2          imul    eax,edx
+00401944 8b9570ffffff    mov     edx,dword ptr [ebp-90h]
+0040194a 0fb61432        movzx   edx,byte ptr [edx+esi]
+0040194e 03c2            add     eax,edx
+00401950 99              cdq
+00401951 f7ff            idiv    eax,edi
+00401953 8b5580          mov     edx,dword ptr [ebp-80h]
+00401956 83c104          add     ecx,4
+00401959 83c604          add     esi,4
+0040195c 0fb6c0          movzx   eax,al
+0040195f 0bd0            or      edx,eax
+00401961 ff4d98          dec     dword ptr [ebp-68h]
+00401964 8956fc          mov     dword ptr [esi-4],edx
+00401967 0f85c3feffff    jne     image00400000+0x1830 (00401830)
+0040196d 8b9d60ffffff    mov     ebx,dword ptr [ebp-0A0h]
+00401973 8b857cffffff    mov     eax,dword ptr [ebp-84h]
+00401979 014588          add     dword ptr [ebp-78h],eax
+0040197c 01458c          add     dword ptr [ebp-74h],eax
+0040197f 03c0            add     eax,eax
+00401981 03c0            add     eax,eax
+00401983 018578ffffff    add     dword ptr [ebp-88h],eax
+00401989 014590          add     dword ptr [ebp-70h],eax
+0040198c 0145a8          add     dword ptr [ebp-58h],eax
+0040198f 4f              dec     edi
+00401990 83ff01          cmp     edi,1
+00401993 0f8f2efeffff    jg      image00400000+0x17c7 (004017c7)
+00401999 8bbd68ffffff    mov     edi,dword ptr [ebp-98h]
+0040199f 8b55b0          mov     edx,dword ptr [ebp-50h]
+004019a2 8b75b4          mov     esi,dword ptr [ebp-4Ch]
+004019a5 6a00            push    0
+004019a7 8d4dbc          lea     ecx,[ebp-44h]
+004019aa 51              push    ecx
+004019ab 53              push    ebx
+004019ac 57              push    edi
+004019ad 6a00            push    0
+004019af 52              push    edx
+004019b0 56              push    esi
+004019b1 ff1528d04000    call    dword ptr [image00400000+0xd028 (0040d028)]    ; GDI32!SetDIBits()
+004019b7 8b4dac          mov     ecx,dword ptr [ebp-54h]
+004019ba 8b9574ffffff    mov     edx,dword ptr [ebp-8Ch]
+004019c0 682000cc00      push    0CC0020h
+004019c5 8d479c          lea     eax,[edi-64h]
+004019c8 50              push    eax
+004019c9 6a00            push    0
+004019cb 56              push    esi
+004019cc 6a63            push    63h
+004019ce 51              push    ecx
+004019cf 50              push    eax
+004019d0 6a00            push    0
+004019d2 52              push    edx
+004019d3 ff1534d04000    call    dword ptr [image00400000+0xd034 (0040d034)]    ; GDI32!BitBlt()
+004019d9 6a32            push    32h
+004019db ff1578d04000    call    dword ptr [image00400000+0xd078 (0040d078)]    ; kernel32!Sleep(0x32)
+004019e1 803d691b410000  cmp     byte ptr [image00400000+0x11b69 (00411b69)],0
+004019e8 0f8492fcffff    je      image00400000+0x1680 (00401680)                ; if (!finish_thread) goto draw_flames_loop
+004019ee 8bb574ffffff    mov     esi,dword ptr [ebp-8Ch]
+004019f4 8b7d84          mov     edi,dword ptr [ebp-7Ch]
+
+draw_flames_loop_end:
+004019f7 57              push    edi
+004019f8 e8210c0000      call    image00400000+0x261e (0040261e)
+004019fd 8b459c          mov     eax,dword ptr [ebp-64h]
+00401a00 50              push    eax
+00401a01 e8180c0000      call    image00400000+0x261e (0040261e)
+00401a06 53              push    ebx
+00401a07 e8120c0000      call    image00400000+0x261e (0040261e)
+00401a0c 8b4db4          mov     ecx,dword ptr [ebp-4Ch]
+00401a0f 8b3d0cd04000    mov     edi,dword ptr [image00400000+0xd00c (0040d00c)]
+00401a15 83c40c          add     esp,0Ch
+00401a18 51              push    ecx
+00401a19 ffd7            call    edi                                            ; GDI32!DeleteDC()
+00401a1b 8b55a4          mov     edx,dword ptr [ebp-5Ch]
+00401a1e 52              push    edx
+00401a1f ffd7            call    edi                                            ; GDI32!DeleteDC()
+00401a21 8b45a0          mov     eax,dword ptr [ebp-60h]
+00401a24 8b3d18d04000    mov     edi,dword ptr [image00400000+0xd018 (0040d018)]
+00401a2a 50              push    eax
+00401a2b ffd7            call    edi                                            ; GDI32!GDI32!DeleteObject()
+00401a2d 8b4db0          mov     ecx,dword ptr [ebp-50h]
+00401a30 51              push    ecx
+00401a31 eb7b            jmp     image00400000+0x1aae (00401aae)
+
+finish3:
+00401a33 53              push    ebx
+00401a34 eb08            jmp     image00400000+0x1a3e (00401a3e)
+00401a36 8b459c          mov     eax,dword ptr [ebp-64h]
+00401a39 85c0            test    eax,eax
+00401a3b 7409            je      image00400000+0x1a46 (00401a46)
+00401a3d 50              push    eax
+00401a3e e8db0b0000      call    image00400000+0x261e (0040261e)
+00401a43 83c404          add     esp,4
+00401a46 85ff            test    edi,edi
+00401a48 7409            je      image00400000+0x1a53 (00401a53)
+00401a4a 57              push    edi
+00401a4b e8ce0b0000      call    image00400000+0x261e (0040261e)
+00401a50 83c404          add     esp,4
+00401a53 8b45b4          mov     eax,dword ptr [ebp-4Ch]
+00401a56 8b3d0cd04000    mov     edi,dword ptr [image00400000+0xd00c (0040d00c)]
+00401a5c 50              push    eax
+00401a5d ffd7            call    edi                                            ; GDI32!DeleteDC()
+00401a5f 8b4da4          mov     ecx,dword ptr [ebp-5Ch]
+00401a62 51              push    ecx
+00401a63 ffd7            call    edi                                            ; GDI32!DeleteDC()
+00401a65 8b55a0          mov     edx,dword ptr [ebp-60h]
+00401a68 8b3d18d04000    mov     edi,dword ptr [image00400000+0xd018 (0040d018)]
+00401a6e 52              push    edx
+00401a6f ffd7            call    edi                                            ; GDI32!GDI32!DeleteObject()
+00401a71 8b45b0          mov     eax,dword ptr [ebp-50h]
+00401a74 50              push    eax
+00401a75 ffd7            call    edi                                            ; GDI32!GDI32!DeleteObject()
+00401a77 8b4d94          mov     ecx,dword ptr [ebp-6Ch]
+00401a7a 56              push    esi
+00401a7b 51              push    ecx
+00401a7c eb37            jmp     image00400000+0x1ab5 (00401ab5)                ; goto finish
+
+finish2:
+00401a7e 51              push    ecx
+00401a7f ff150cd04000    call    dword ptr [image00400000+0xd00c (0040d00c)]    ; GDI32!DeleteDC()
+00401a85 8b45a0          mov     eax,dword ptr [ebp-60h]
+00401a88 8b4da4          mov     ecx,dword ptr [ebp-5Ch]
+00401a8b 85c9            test    ecx,ecx
+00401a8d 740a            je      image00400000+0x1a99 (00401a99)
+00401a8f 51              push    ecx
+00401a90 ff150cd04000    call    dword ptr [image00400000+0xd00c (0040d00c)]    ; GDI32!DeleteDC()
+00401a96 8b45a0          mov     eax,dword ptr [ebp-60h]
+00401a99 8b3d18d04000    mov     edi,dword ptr [image00400000+0xd018 (0040d018)]
+00401a9f 85c0            test    eax,eax
+00401aa1 7403            je      image00400000+0x1aa6 (00401aa6)
+00401aa3 50              push    eax
+00401aa4 ffd7            call    edi                                            ; GDI32!GDI32!DeleteObject()
+00401aa6 8b45b0          mov     eax,dword ptr [ebp-50h]
+00401aa9 85c0            test    eax,eax
+00401aab 7403            je      image00400000+0x1ab0 (00401ab0)
+00401aad 50              push    eax
+
+00401aae ffd7            call    edi                                            ; GDI32!GDI32!DeleteObject()
+00401ab0 8b5594          mov     edx,dword ptr [ebp-6Ch]
+00401ab3 56              push    esi
+00401ab4 52              push    edx
+
+finish:
+00401ab5 ff1564d14000    call    dword ptr [image00400000+0xd164 (0040d164)]    ; USER32!ReleaseDC()
+00401abb 8b4df8          mov     ecx,dword ptr [ebp-8]
+00401abe 5f              pop     edi
+00401abf 5e              pop     esi
+00401ac0 33cd            xor     ecx,ebp
+00401ac2 33c0            xor     eax,eax
+00401ac4 c6056a1b410001  mov     byte ptr [image00400000+0x11b6a (00411b6a)],1  ; is_thread_finished=1
+00401acb 5b              pop     ebx
+00401acc e82a0a0000      call    image00400000+0x24fb (004024fb)
+00401ad1 8be5            mov     esp,ebp
+00401ad3 5d              pop     ebp
+00401ad4 c20400          ret     4
